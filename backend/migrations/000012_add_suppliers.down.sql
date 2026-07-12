@@ -1,0 +1,3 @@
+ALTER TABLE batches DROP COLUMN IF EXISTS supplier_id;
+ALTER TABLE batches DROP COLUMN IF EXISTS amount_paid;
+DROP TABLE IF EXISTS suppliers;

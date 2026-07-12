@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Tailwind v4 defaults border-color to currentColor; restore the design token */
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-border);
+  }
+}
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* K&S Wheel-Tyre brand: royal navy + metallic gold on warm cream */
+  --color-primary: hsl(231, 48%, 34%);
+  --color-primary-foreground: hsl(0, 0%, 100%);
+  --color-accent: hsl(35, 52%, 41%);
+  --color-accent-foreground: hsl(0, 0%, 100%);
+  --color-background: hsl(40, 22%, 95%);
+  --color-foreground: hsl(230, 20%, 16%);
+  --color-card: hsl(0, 0%, 100%);
+  --color-card-foreground: hsl(230, 20%, 16%);
+  --color-muted: hsl(40, 16%, 91%);
+  --color-muted-foreground: hsl(230, 10%, 42%);
+  --color-destructive: hsl(0, 72%, 48%);
+  --color-destructive-foreground: hsl(0, 0%, 100%);
+  --color-border: hsl(38, 15%, 86%);
+  --color-input: hsl(38, 15%, 82%);
+  --color-ring: hsl(231, 48%, 34%);
+
+  /* Brand surfaces for the navy sidebar / login artwork */
+  --color-brand-navy: hsl(231, 44%, 20%);
+  --color-brand-navy-deep: hsl(231, 47%, 15%);
+  --color-brand-gold: hsl(38, 56%, 60%);
+
+  --radius: 0.5rem;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+}

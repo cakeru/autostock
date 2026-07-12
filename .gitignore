@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+backend/vendor/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+frontend/dist/
+backend/autostock
+backend/server
+backend/tmp/
+
+# Local screenshots
+/Screenshot*.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Testing
+coverage/
+*.out
+backend/test-results/
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Secrets
+*.pem
+*.key
+secrets/
+
+# Backups
+backups/
+*.sql.gz
+
+# Go
+backend/bin/
+backend/debug
+
+# Node
+frontend/.pnp
+frontend/.pnp.js
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Misc
+.autostock
+*.pid

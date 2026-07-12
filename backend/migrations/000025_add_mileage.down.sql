@@ -1,0 +1,2 @@
+ALTER TABLE service_jobs DROP COLUMN IF EXISTS mileage;
+ALTER TABLE invoices DROP COLUMN IF EXISTS mileage;

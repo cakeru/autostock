@@ -1,0 +1,80 @@
+# ==============================================================================
+# AutoStock — Coolify production compose
+# ==============================================================================
+# Deploy this whole stack as ONE "Docker Compose" resource in Coolify. All three
+# services share Coolify's network, so the frontend's nginx can proxy /api and
+# /uploads to the backend by service name (exactly as in development).
+#
+# Differences from the dev docker-compose.yml:
+#   * No host port bindings — Coolify's proxy reaches the frontend over the
+#     Docker network and terminates TLS. Nothing is published on the host except
+#     via Coolify's ingress. Postgres stays fully internal.
+#   * No fixed container_name — Coolify manages naming.
+#
+# In Coolify: set this file as the compose, then map your domain to the
+# `frontend` service, port 80. See docs/DEPLOYMENT.md.
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autostock
+      POSTGRES_USER: autostock
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autostock"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://autostock:${DB_PASSWORD}@postgres:5432/autostock?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: "8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_ENV: production
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      UPLOAD_DIR: /app/uploads
+      STORAGE_PUBLIC_URL: /uploads
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+    volumes:
+      # Only needed for STORAGE_DRIVER=local. On R2/S3 this holds nothing and can
+      # be dropped, leaving the box stateless for images.
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+    restart: unless-stopped
+    # This is the only service Coolify exposes. Point your domain at it (port 80).
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:
