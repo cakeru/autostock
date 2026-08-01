@@ -363,7 +363,7 @@ func (s *Service) GetInventory(ctx context.Context, branchID int64, windowDays i
 	for prRows.Next() {
 		var pid int64
 		var name string
-		var stock, minStock int
+		var stock, minStock float64
 		if err := prRows.Scan(&pid, &name, &stock, &minStock); err != nil {
 			prRows.Close()
 			return nil, fmt.Errorf("scan reorder: %w", err)

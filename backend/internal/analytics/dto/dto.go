@@ -57,23 +57,23 @@ type InventoryValuation struct {
 	RetailValue     float64 `json:"retail_value"`
 	PotentialProfit float64 `json:"potential_profit"`
 	SKUCount        int     `json:"sku_count"`
-	UnitsOnHand     int     `json:"units_on_hand"`
+	UnitsOnHand     float64 `json:"units_on_hand"`
 }
 
 type ProductStat struct {
 	ProductID  int64   `json:"product_id"`
 	Name       string  `json:"name"`
 	Type       string  `json:"type"`
-	QtySold    int     `json:"qty_sold"`
+	QtySold    float64 `json:"qty_sold"`
 	RevenueUSD float64 `json:"revenue_usd"`
 	ProfitUSD  float64 `json:"profit_usd"`
-	StockQty   int     `json:"stock_qty"`
+	StockQty   float64 `json:"stock_qty"`
 }
 
 type DeadStockItem struct {
 	ProductID int64   `json:"product_id"`
 	Name      string  `json:"name"`
-	StockQty  int     `json:"stock_qty"`
+	StockQty  float64 `json:"stock_qty"`
 	CostValue float64 `json:"cost_value"`
 	LastSold  *string `json:"last_sold,omitempty"`
 }
@@ -81,8 +81,8 @@ type DeadStockItem struct {
 type ReorderItem struct {
 	ProductID int64    `json:"product_id"`
 	Name      string   `json:"name"`
-	StockQty  int      `json:"stock_qty"`
-	MinStock  int      `json:"min_stock"`
+	StockQty  float64  `json:"stock_qty"`
+	MinStock  float64  `json:"min_stock"`
 	DailyRate float64  `json:"daily_rate"`
 	DaysLeft  *float64 `json:"days_left,omitempty"`
 }

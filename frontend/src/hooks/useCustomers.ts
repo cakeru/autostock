@@ -64,7 +64,12 @@ export function useCreateVehicle() {
   return useMutation({
     mutationFn: ({ customerId, data }: { customerId: number; data: CreateVehicleRequest }) =>
       customersApi.createVehicle(customerId, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customer', null, 'vehicles'] }); toast.success('Vehicle added') },
+    onSuccess: (_vehicle, { customerId }) => {
+      qc.invalidateQueries({ queryKey: ['customer', customerId, 'vehicles'] })
+      qc.invalidateQueries({ queryKey: ['customer', customerId] })
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      toast.success('Vehicle added')
+    },
   })
 }
 

@@ -4,6 +4,8 @@ import { formatDate } from '@/utils/date'
 import { formatUSD } from '@/utils/currency'
 import { imageSrc } from '@/utils/imageUrl'
 import { useNavigate } from 'react-router-dom'
+import { useSettings } from '@/hooks/useSettings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { VisitLines } from './VisitLines'
 import { useVehicleTimeline, useAddVisitPhoto, useSetPhotoVisibility, useDeleteServiceEvent } from '@/hooks/useVehicleProfile'
@@ -18,6 +20,8 @@ export function ServiceHistory({ vehicleId, bodyType, onPhoto }: {
   bodyType?: string
   onPhoto: (url: string) => void
 }) {
+  const { data: settings } = useSettings()
+  const unit = unitLabel(distanceUnit(settings))
   const { data: visits, isLoading } = useVehicleTimeline(vehicleId)
   const deleteEvent = useDeleteServiceEvent(vehicleId)
   const [pendingDelete, setPendingDelete] = useState<{ id: number; kind: 'oil' | 'tire' } | null>(null)
@@ -35,7 +39,7 @@ export function ServiceHistory({ vehicleId, bodyType, onPhoto }: {
       ) : (
         <ol className="relative space-y-6 border-l border-border pl-6">
           {visits.map((v, i) => (
-            <VisitCard key={`${v.date}-${i}`} visit={v} vehicleId={vehicleId} bodyType={bodyType} onPhoto={onPhoto}
+            <VisitCard key={`${v.date}-${i}`} visit={v} vehicleId={vehicleId} bodyType={bodyType} unit={unit} onPhoto={onPhoto}
               onRemoveEvent={(id, kind) => setPendingDelete({ id, kind })} />
           ))}
         </ol>
@@ -54,10 +58,11 @@ export function ServiceHistory({ vehicleId, bodyType, onPhoto }: {
   )
 }
 
-function VisitCard({ visit: v, vehicleId, bodyType, onPhoto, onRemoveEvent }: {
+function VisitCard({ visit: v, vehicleId, bodyType, unit, onPhoto, onRemoveEvent }: {
   visit: Visit
   vehicleId: number
   bodyType?: string
+  unit: string
   onPhoto: (url: string) => void
   onRemoveEvent: (eventId: number, kind: 'oil' | 'tire') => void
 }) {
@@ -75,7 +80,7 @@ function VisitCard({ visit: v, vehicleId, bodyType, onPhoto, onRemoveEvent }: {
 
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">{formatDate(v.date)}</p>
-        {v.mileage != null && <p className="text-xs tabular-nums text-muted-foreground">{v.mileage.toLocaleString()} km</p>}
+        {v.mileage != null && <p className="text-xs tabular-nums text-muted-foreground">{v.mileage.toLocaleString()} {unit}</p>}
       </div>
 
       <div className="mt-2 space-y-2.5">

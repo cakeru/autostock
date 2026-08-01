@@ -9,6 +9,7 @@ import { useCreateInvoiceFromJob } from '@/hooks/useInvoices'
 import { useProducts } from '@/hooks/useProducts'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useSettings } from '@/hooks/useSettings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { StatusBadge } from '@/components/servicejob/StatusBadge'
 import { PriorityBadge } from '@/components/servicejob/PriorityBadge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export function ServiceJobDetail() {
   const { data: productsData } = useProducts({ per_page: 100 })
   const { data: employees } = useEmployees()
   const { data: settingsData } = useSettings()
+  const unit = unitLabel(distanceUnit(settingsData))
   const updateMutation = useUpdateServiceJob()
   const completeMutation = useCompleteServiceJob()
   const approveQuoteMutation = useApproveQuote()
@@ -105,7 +107,7 @@ export function ServiceJobDetail() {
     completeMutation.mutate(jobId, {
       onSuccess: () => {
         createInvoiceMutation.mutate(
-          { jobId, data: { exchange_rate: settingsData?.exchange_rate_usd_khr || 4050 } },
+          { jobId, data: { exchange_rate: settingsData?.exchange_rate_usd_khr || 4050, discount: job.discount || undefined } },
           { onSuccess: (data: any) => { if (data?.id) navigate(`/invoices/${data.id}`) } }
         )
       },
@@ -213,7 +215,7 @@ export function ServiceJobDetail() {
             {job.vehicle_info && <p className="text-sm text-muted-foreground">{job.vehicle_info} ({job.plate_number})</p>}
             {job.vehicle_id && (
               <div className="flex items-center gap-2 pt-1">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer (km)</label>
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer ({unit})</label>
                 {job.status === 'completed' || job.status === 'cancelled' ? (
                   <span className="text-sm">{job.mileage != null ? job.mileage.toLocaleString() : '—'}</span>
                 ) : (
@@ -264,7 +266,7 @@ export function ServiceJobDetail() {
             )}
 
             {job.status === 'completed' && !job.invoice_id && (
-              <Button className="w-full" onClick={() => createInvoiceMutation.mutate({ jobId, data: { exchange_rate: settingsData?.exchange_rate_usd_khr || 4050 } },
+              <Button className="w-full" onClick={() => createInvoiceMutation.mutate({ jobId, data: { exchange_rate: settingsData?.exchange_rate_usd_khr || 4050, discount: job.discount || undefined } },
                 { onSuccess: (data: any) => { if (data?.id) navigate(`/invoices/${data.id}`) } }
               )} disabled={createInvoiceMutation.isPending}>
                 {createInvoiceMutation.isPending ? 'Generating...' : 'Generate Invoice'}

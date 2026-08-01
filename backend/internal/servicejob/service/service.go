@@ -108,6 +108,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Servi
 		       sj.invoice_id, COALESCE(sj.notes, ''), sj.scheduled_at,
 		       sj.assigned_to, COALESCE(asg.name, ''),
 		       sj.quote_approved_at, sj.quote_approved_by,
+		       COALESCE(sj.discount, 0),
 		       sj.created_by, COALESCE(cred.full_name, ''),
 		       sj.created_at, sj.updated_at
 		FROM service_jobs sj
@@ -123,7 +124,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Servi
 			&j.EstimatedHours, &j.ActualHours, &j.StartedAt, &j.CompletedAt,
 			&j.InvoiceID, &j.Notes, &j.ScheduledAt,
 			&j.AssignedToID, &j.AssignedToName,
-			&j.QuoteApprovedAt, &j.QuoteApprovedBy,
+			&j.QuoteApprovedAt, &j.QuoteApprovedBy, &j.Discount,
 			&j.CreatedByID, &j.CreatedByName,
 			&j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
@@ -180,10 +181,10 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 
 	var j dto.ServiceJobListResponse
 	err = tx.QueryRow(ctx, `
-		INSERT INTO service_jobs (branch_id, job_number, customer_id, vehicle_id, mileage, description, priority, estimated_hours, notes, created_by, scheduled_at, assigned_to)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, '')::timestamptz, $12)
+		INSERT INTO service_jobs (branch_id, job_number, customer_id, vehicle_id, mileage, description, priority, estimated_hours, discount, notes, created_by, scheduled_at, assigned_to)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, '')::timestamptz, $13)
 		RETURNING id, branch_id, job_number, status, priority, COALESCE(description,''), created_at, updated_at, created_by`,
-		branchID, jobNumber, req.CustomerID, req.VehicleID, req.Mileage, req.Description, priority, req.EstimatedHours, req.Notes, userID, req.ScheduledAt, req.AssignedTo).
+		branchID, jobNumber, req.CustomerID, req.VehicleID, req.Mileage, req.Description, priority, req.EstimatedHours, req.Discount, req.Notes, userID, req.ScheduledAt, req.AssignedTo).
 		Scan(&j.ID, &j.BranchID, &j.JobNumber, &j.Status, &j.Priority, &j.Description, &j.CreatedAt, &j.UpdatedAt, &j.CreatedByID)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)

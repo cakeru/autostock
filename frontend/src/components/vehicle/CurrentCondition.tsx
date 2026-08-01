@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useSettings } from '@/hooks/useSettings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { useQueryClient } from '@tanstack/react-query'
 import { Disc, Plus, Camera, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -45,6 +47,8 @@ export function CurrentCondition({ vehicleId, bodyType, due }: {
   due?: DueStatus[]
 }) {
   const qc = useQueryClient()
+  const { data: settings } = useSettings()
+  const unit = unitLabel(distanceUnit(settings))
   const { data: services } = useWheelServices(vehicleId)
   const { data: tireOptions } = useTireOptions(vehicleId)
   const { data: partStatuses } = usePartStatuses(vehicleId)
@@ -127,6 +131,7 @@ export function CurrentCondition({ vehicleId, bodyType, due }: {
 
       {showDialog && (
         <WheelServiceDialog
+          unit={unit}
           tireOptions={tireOptions || []}
           onClose={() => setShowDialog(false)}
           onCreate={handleCreate}
@@ -136,6 +141,7 @@ export function CurrentCondition({ vehicleId, bodyType, due }: {
 
       {showParts && (
         <AddPartDialog
+          unit={unit}
           onClose={() => setShowParts(false)}
           onCreate={(data) => createPart.mutate(data, { onSuccess: () => setShowParts(false) })}
           loading={createPart.isPending}
@@ -167,7 +173,8 @@ function cornerHasData(f: CornerForm): boolean {
   return Object.values(f).some((v) => v !== '')
 }
 
-function WheelServiceDialog({ tireOptions, onClose, onCreate, loading }: {
+function WheelServiceDialog({ unit, tireOptions, onClose, onCreate, loading }: {
+  unit: string
   tireOptions: TireOption[]
   onClose: () => void
   onCreate: (payload: { performed_at?: string; mileage?: number; notes?: string; corners: CornerData[] }, file: File | null) => void
@@ -242,7 +249,7 @@ function WheelServiceDialog({ tireOptions, onClose, onCreate, loading }: {
             <Input type="date" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Odometer (km)</Label>
+            <Label>Odometer ({unit})</Label>
             <Input value={mileage} onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="82,000" />
           </div>
           <div className="col-span-2 space-y-1">
@@ -373,7 +380,8 @@ const PART_TYPES: { key: string; label: string }[] = [
   { key: 'chain_sprocket', label: 'Chain & sprocket' },
 ]
 
-function AddPartDialog({ onClose, onCreate, loading }: {
+function AddPartDialog({ unit, onClose, onCreate, loading }: {
+  unit: string
   onClose: () => void
   onCreate: (data: { part_name: string; part_key?: string; position?: string; replaced_at?: string; mileage?: number }) => void
   loading: boolean
@@ -416,7 +424,7 @@ function AddPartDialog({ onClose, onCreate, loading }: {
               <Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="front / rear-left" />
             </div>
             <div className="space-y-1">
-              <Label>Odometer (km)</Label>
+              <Label>Odometer ({unit})</Label>
               <Input value={mileage} onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="82,000" />
             </div>
           </div>

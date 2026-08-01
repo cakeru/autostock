@@ -1,5 +1,5 @@
 import api from './api'
-import type { CreateInvoiceRequest, Invoice, InvoiceDetail, InvoiceListParams, UpdateInvoiceRequest, RecordPaymentRequest, Payment } from '@/types/invoice'
+import type { CreateInvoiceRequest, Invoice, InvoiceDetail, InvoiceListParams, UpdateInvoiceRequest, RecordPaymentRequest, Payment, UpdateInvoiceItemRequest } from '@/types/invoice'
 
 export const invoicesApi = {
   list: (params?: InvoiceListParams) => api.get('/invoices', { params }).then(r => r.data),
@@ -15,4 +15,17 @@ export const invoicesApi = {
     api.post(`/invoices/${id}/payments`, data).then(r => r.data.data),
   listPayments: (id: number): Promise<Payment[]> =>
     api.get(`/invoices/${id}/payments`).then(r => r.data.data),
+  addItem: (id: number, data: { product_id?: number; item_type: string; description: string; quantity: number; unit_price_usd: number }): Promise<any> =>
+    api.post(`/invoices/${id}/items`, data).then(r => r.data.data),
+  updateItem: (id: number, itemId: number, data: UpdateInvoiceItemRequest): Promise<any> =>
+    api.put(`/invoices/${id}/items/${itemId}`, data).then(r => r.data.data),
+  removeItem: (id: number, itemId: number) =>
+    api.delete(`/invoices/${id}/items/${itemId}`),
+  uploadPaymentProof: (invoiceId: number, paymentId: number, file: File): Promise<{ proof_url: string }> => {
+    const form = new FormData()
+    form.append('photo', file)
+    return api.post(`/invoices/${invoiceId}/payments/${paymentId}/proof`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
 }

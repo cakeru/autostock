@@ -394,8 +394,9 @@ func (s *Service) CreateFromServiceJob(ctx context.Context, branchID int64, user
 	var customerID, vehicleID, existingInvoiceID *int64
 	var mileage *int
 	var status string
-	err := s.pool.QueryRow(ctx, `SELECT customer_id, vehicle_id, mileage, status, invoice_id FROM service_jobs WHERE id = $1`, jobID).
-		Scan(&customerID, &vehicleID, &mileage, &status, &existingInvoiceID)
+	var jobDiscount float64
+	err := s.pool.QueryRow(ctx, `SELECT customer_id, vehicle_id, mileage, status, invoice_id, COALESCE(discount, 0) FROM service_jobs WHERE id = $1`, jobID).
+		Scan(&customerID, &vehicleID, &mileage, &status, &existingInvoiceID, &jobDiscount)
 	if err != nil {
 		return nil, domain.ErrNotFound
 	}
@@ -437,13 +438,20 @@ func (s *Service) CreateFromServiceJob(ctx context.Context, branchID int64, user
 		return nil, err
 	}
 
+	// The discount agreed when the cart was saved as a job survives the
+	// conversion; an explicit one on the request wins.
+	discount := jobDiscount
+	if req.Discount > 0 {
+		discount = req.Discount
+	}
+
 	return s.Create(ctx, branchID, userID, &dto.CreateInvoiceRequest{
 		CustomerID:    customerID,
 		VehicleID:     vehicleID,
 		ServiceJobID:  &jobID,
 		Mileage:       mileage,
 		Items:         items,
-		Discount:      req.Discount,
+		Discount:      discount,
 		ExchangeRate:  req.ExchangeRate,
 		PaymentMethod: req.PaymentMethod,
 		Notes:         req.Notes,
@@ -460,19 +468,108 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		return nil, &domain.AppError{Code: "VOIDED", Message: "Cannot update a voided invoice", Status: 400}
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	oldVehicleID := inv.VehicleID
+	newVehicleID := req.VehicleID
+	if req.ClearVehicle {
+		newVehicleID = nil
+	}
+	vehicleChanged := oldVehicleID == nil || newVehicleID == nil || *oldVehicleID != *newVehicleID
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
 		UPDATE invoices
 		SET payment_method = COALESCE($1, payment_method),
 		    payment_notes = COALESCE($2, payment_notes),
 		    notes = COALESCE($3, notes),
+		    vehicle_id = CASE WHEN $6 THEN NULL ELSE COALESCE($4, vehicle_id) END,
+		    mileage = COALESCE($5, mileage),
 		    updated_at = NOW()
-		WHERE id = $4 AND branch_id = $5`,
-		req.PaymentMethod, req.PaymentNotes, req.Notes, id, branchID)
+		WHERE id = $7 AND branch_id = $8`,
+		req.PaymentMethod, req.PaymentNotes, req.Notes, req.VehicleID, req.Mileage,
+		req.ClearVehicle, id, branchID)
 	if err != nil {
 		return nil, fmt.Errorf("update invoice: %w", err)
 	}
 
+	// The vehicle's tire/oil service events are logged when an invoice is
+	// issued, so attaching a vehicle after the fact (or switching to another)
+	// must re-sync them: drop this invoice's events and re-log for the vehicle
+	// it now belongs to, so the due-for-service estimate stays accurate.
+	if vehicleChanged {
+		if _, err := tx.Exec(ctx, `DELETE FROM vehicle_service_events WHERE invoice_id = $1`, id); err != nil {
+			return nil, fmt.Errorf("clear vehicle service events: %w", err)
+		}
+		if newVehicleID != nil {
+			occurredAt := time.Now()
+			if inv.IssuedAt != nil {
+				occurredAt = *inv.IssuedAt
+			}
+			if err := s.logVehicleEvents(ctx, tx, branchID, *newVehicleID, id, req.Mileage, occurredAt); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+
 	return s.Get(ctx, branchID, id)
+}
+
+// logVehicleEvents mirrors the tire/oil service-event logging that Create
+// performs at issue time, so a vehicle attached to an existing invoice still
+// gets its due-for-service history. Idempotent per (vehicle, type, invoice).
+func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, vehicleID, invoiceID int64, mileage *int, occurredAt time.Time) error {
+	rows, err := tx.Query(ctx, `
+		SELECT p.type, p.is_oil_product, p.name, p.rated_life_km
+		FROM invoice_items ii
+		JOIN products p ON p.id = ii.product_id
+		WHERE ii.invoice_id = $1 AND ii.product_id IS NOT NULL`, invoiceID)
+	if err != nil {
+		return fmt.Errorf("query invoice products: %w", err)
+	}
+	defer rows.Close()
+
+	var tireName, oilName string
+	var tireLifeKm *int
+	for rows.Next() {
+		var ptype string
+		var isOil bool
+		var name string
+		var lifeKm *int
+		if err := rows.Scan(&ptype, &isOil, &name, &lifeKm); err != nil {
+			return fmt.Errorf("scan invoice product: %w", err)
+		}
+		if ptype == "tire" && tireName == "" {
+			tireName = name
+			tireLifeKm = lifeKm
+		}
+		if isOil && oilName == "" {
+			oilName = name
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate invoice products: %w", err)
+	}
+
+	var invID = invoiceID
+	if tireName != "" {
+		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "tire", mileage, occurredAt, &invID, nil, tireName, tireLifeKm, nil); err != nil {
+			return err
+		}
+	}
+	if oilName != "" {
+		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "oil", mileage, occurredAt, &invID, nil, oilName, nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) RecordPayment(ctx context.Context, branchID int64, id int64, userID int64, req *dto.RecordPaymentRequest) (*dto.PaymentResponse, error) {
@@ -510,11 +607,11 @@ func (s *Service) RecordPayment(ctx context.Context, branchID int64, id int64, u
 	}
 	var p dto.PaymentResponse
 	err = tx.QueryRow(ctx, `
-		INSERT INTO payments (invoice_id, amount, method, received_by, notes, currency, tendered_amount, exchange_rate)
-		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, 0), NULLIF($8, 0))
-		RETURNING id, invoice_id, amount, method, COALESCE(notes, ''), currency, tendered_amount, created_at`,
-		id, req.Amount, req.Method, userID, req.Notes, currency, req.TenderedAmount, req.ExchangeRate).
-		Scan(&p.ID, &p.InvoiceID, &p.Amount, &p.Method, &p.Notes, &p.Currency, &p.TenderedAmount, &p.CreatedAt)
+		INSERT INTO payments (invoice_id, amount, method, received_by, notes, currency, tendered_amount, exchange_rate, reference)
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, 0), NULLIF($8, 0), NULLIF($9, ''))
+		RETURNING id, invoice_id, amount, method, COALESCE(notes, ''), currency, tendered_amount, COALESCE(reference, ''), created_at`,
+		id, req.Amount, req.Method, userID, req.Notes, currency, req.TenderedAmount, req.ExchangeRate, req.Reference).
+		Scan(&p.ID, &p.InvoiceID, &p.Amount, &p.Method, &p.Notes, &p.Currency, &p.TenderedAmount, &p.Reference, &p.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("record payment: %w", err)
 	}
@@ -553,7 +650,7 @@ func (s *Service) RecordPayment(ctx context.Context, branchID int64, id int64, u
 func (s *Service) GetPayments(ctx context.Context, invoiceID int64) ([]dto.PaymentResponse, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, p.invoice_id, p.amount, p.method, COALESCE(p.currency, 'USD'), p.tendered_amount,
-		       COALESCE(u.full_name, ''), COALESCE(p.notes, ''), p.created_at
+		       COALESCE(u.full_name, ''), COALESCE(p.notes, ''), COALESCE(p.reference, ''), COALESCE(p.proof_url, ''), p.created_at
 		FROM payments p
 		LEFT JOIN users u ON u.id = p.received_by
 		WHERE p.invoice_id = $1
@@ -566,7 +663,7 @@ func (s *Service) GetPayments(ctx context.Context, invoiceID int64) ([]dto.Payme
 	var payments []dto.PaymentResponse
 	for rows.Next() {
 		var pay dto.PaymentResponse
-		if err := rows.Scan(&pay.ID, &pay.InvoiceID, &pay.Amount, &pay.Method, &pay.Currency, &pay.TenderedAmount, &pay.ReceivedByName, &pay.Notes, &pay.CreatedAt); err != nil {
+		if err := rows.Scan(&pay.ID, &pay.InvoiceID, &pay.Amount, &pay.Method, &pay.Currency, &pay.TenderedAmount, &pay.ReceivedByName, &pay.Notes, &pay.Reference, &pay.ProofURL, &pay.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan payment: %w", err)
 		}
 		payments = append(payments, pay)
@@ -575,6 +672,23 @@ func (s *Service) GetPayments(ctx context.Context, invoiceID int64) ([]dto.Payme
 		payments = []dto.PaymentResponse{}
 	}
 	return payments, nil
+}
+
+// SetPaymentProof attaches a stored proof photo to a payment.
+func (s *Service) SetPaymentProof(ctx context.Context, branchID, paymentID int64, proofURL string) error {
+	result, err := s.pool.Exec(ctx, `
+		UPDATE payments p
+		SET proof_url = $1
+		FROM invoices i
+		WHERE p.id = $2 AND i.id = p.invoice_id AND i.branch_id = $3 AND i.status <> 'voided'`,
+		proofURL, paymentID, branchID)
+	if err != nil {
+		return fmt.Errorf("set payment proof: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Service) Void(ctx context.Context, branchID int64, id int64, userID int64, reason string) (*dto.InvoiceDetailResponse, error) {
@@ -683,7 +797,7 @@ func (s *Service) ListItems(ctx context.Context, invoiceID int64) ([]dto.Invoice
 	return items, nil
 }
 
-func (s *Service) AddItem(ctx context.Context, branchID int64, invoiceID int64, req *dto.InvoiceItemReq) (*dto.InvoiceItemResp, error) {
+func (s *Service) AddItem(ctx context.Context, branchID int64, userID int64, invoiceID int64, req *dto.InvoiceItemReq) (*dto.InvoiceItemResp, error) {
 	desc := req.Description
 	if desc == "" {
 		desc = req.ItemType
@@ -694,8 +808,8 @@ func (s *Service) AddItem(ctx context.Context, branchID int64, invoiceID int64, 
 	if err != nil {
 		return nil, domain.ErrNotFound
 	}
-	if status != "draft" {
-		return nil, &domain.AppError{Code: "INVOICE_FROZEN", Message: "Cannot modify items on a non-draft invoice. Void and recreate instead.", Status: 400}
+	if status == "voided" {
+		return nil, &domain.AppError{Code: "VOIDED", Message: "Cannot modify items on a voided invoice", Status: 400}
 	}
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -716,7 +830,19 @@ func (s *Service) AddItem(ctx context.Context, branchID int64, invoiceID int64, 
 		return nil, fmt.Errorf("add item: %w", err)
 	}
 
+	// Draft invoices never touched stock; everything else has already been
+	// deducted once, so a line added now must deduct as an issue would.
+	if status != "draft" && req.ProductID != nil {
+		if err := s.consumeStock(ctx, tx, branchID, invoiceID, *req.ProductID, req.Quantity, &userID); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.recalculateInvoice(ctx, tx, invoiceID); err != nil {
+		return nil, err
+	}
+
+	if err := s.syncVehicleEvents(ctx, tx, branchID, invoiceID); err != nil {
 		return nil, err
 	}
 
@@ -726,18 +852,20 @@ func (s *Service) AddItem(ctx context.Context, branchID int64, invoiceID int64, 
 	return &item, nil
 }
 
-func (s *Service) RemoveItem(ctx context.Context, branchID int64, itemID int64) error {
+func (s *Service) RemoveItem(ctx context.Context, branchID int64, userID int64, itemID int64) error {
 	var invoiceID int64
 	var status string
+	var productID *int64
+	var qty float64
 	err := s.pool.QueryRow(ctx, `
-		SELECT invoice_id, i.status FROM invoice_items ii
+		SELECT invoice_id, i.status, ii.product_id, ii.quantity FROM invoice_items ii
 		JOIN invoices i ON i.id = ii.invoice_id
-		WHERE ii.id = $1 AND i.branch_id = $2`, itemID, branchID).Scan(&invoiceID, &status)
+		WHERE ii.id = $1 AND i.branch_id = $2`, itemID, branchID).Scan(&invoiceID, &status, &productID, &qty)
 	if err != nil {
 		return domain.ErrNotFound
 	}
-	if status != "draft" {
-		return &domain.AppError{Code: "INVOICE_FROZEN", Message: "Cannot modify items on a non-draft invoice. Void and recreate instead.", Status: 400}
+	if status == "voided" {
+		return &domain.AppError{Code: "VOIDED", Message: "Cannot modify items on a voided invoice", Status: 400}
 	}
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -751,11 +879,210 @@ func (s *Service) RemoveItem(ctx context.Context, branchID int64, itemID int64) 
 		return fmt.Errorf("delete item: %w", err)
 	}
 
+	if status != "draft" && productID != nil {
+		if err := s.restoreStock(ctx, tx, branchID, invoiceID, *productID, qty, &userID); err != nil {
+			return err
+		}
+	}
+
 	if err := s.recalculateInvoice(ctx, tx, invoiceID); err != nil {
 		return err
 	}
 
+	if err := s.syncVehicleEvents(ctx, tx, branchID, invoiceID); err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
+}
+
+func (s *Service) UpdateItem(ctx context.Context, branchID, userID, invoiceID, itemID int64, req *dto.UpdateInvoiceItemRequest) (*dto.InvoiceItemResp, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	var productID *int64
+	var oldQty, oldPrice float64
+	err = tx.QueryRow(ctx, `
+		SELECT i.status, ii.product_id, ii.quantity, ii.unit_price_usd
+		FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
+		WHERE ii.id = $1 AND i.id = $2 AND i.branch_id = $3`, itemID, invoiceID, branchID).
+		Scan(&status, &productID, &oldQty, &oldPrice)
+	if err != nil {
+		return nil, domain.ErrNotFound
+	}
+	if status == "voided" {
+		return nil, &domain.AppError{Code: "VOIDED", Message: "Cannot modify items on a voided invoice", Status: 400}
+	}
+
+	newQty := oldQty
+	if req.Quantity != nil {
+		newQty = *req.Quantity
+	}
+	newPrice := oldPrice
+	if req.UnitPriceUSD != nil {
+		newPrice = *req.UnitPriceUSD
+	}
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	if status != "draft" && productID != nil && newQty != oldQty {
+		delta := newQty - oldQty
+		if delta > 0 {
+			if err := s.consumeStock(ctx, tx, branchID, invoiceID, *productID, delta, &userID); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := s.restoreStock(ctx, tx, branchID, invoiceID, *productID, -delta, &userID); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	var item dto.InvoiceItemResp
+	err = tx.QueryRow(ctx, `
+		UPDATE invoice_items
+		SET description = COALESCE(NULLIF($1, ''), description),
+		    quantity = COALESCE($2, quantity),
+		    unit_price_usd = COALESCE($3, unit_price_usd),
+		    total_usd = $4
+		WHERE id = $5
+		RETURNING id, product_id, item_type, description, quantity, unit_price_usd, total_usd`,
+		description, req.Quantity, req.UnitPriceUSD, math.Round(newQty*newPrice*100)/100, itemID).
+		Scan(&item.ID, &item.ProductID, &item.ItemType, &item.Description,
+			&item.Quantity, &item.UnitPriceUSD, &item.TotalUSD)
+	if err != nil {
+		return nil, fmt.Errorf("update item: %w", err)
+	}
+
+	if err := s.recalculateInvoice(ctx, tx, invoiceID); err != nil {
+		return nil, err
+	}
+
+	if err := s.syncVehicleEvents(ctx, tx, branchID, invoiceID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+	return &item, nil
+}
+
+// consumeStock deducts a product line sold on an issued invoice: oversell
+// check, product counter, FIFO batch draw-down, and low-stock alert.
+func (s *Service) consumeStock(ctx context.Context, tx pgx.Tx, branchID, invoiceID, productID int64, qty float64, userID *int64) error {
+	var stockQty, reservedQty, minAlert float64
+	var sku, name string
+	err := tx.QueryRow(ctx,
+		`SELECT stock_quantity, reserved_quantity, min_stock_alert, sku, name FROM products WHERE id = $1 AND branch_id = $2 AND is_active = true FOR UPDATE`,
+		productID, branchID).Scan(&stockQty, &reservedQty, &minAlert, &sku, &name)
+	if err != nil {
+		return fmt.Errorf("check stock for product %d: %w", productID, err)
+	}
+	if available := stockQty - reservedQty; available < qty {
+		return &domain.AppError{
+			Code:    "INSUFFICIENT_STOCK",
+			Message: fmt.Sprintf("insufficient available stock for product %d: %g available (%g on hand, %g reserved), need %g", productID, available, stockQty, reservedQty, qty),
+			Status:  400,
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2`, qty, productID); err != nil {
+		return fmt.Errorf("deduct stock for product %d: %w", productID, err)
+	}
+	if err := batch.ConsumeFIFO(ctx, tx, branchID, productID, qty, "invoice_edited", "invoice", &invoiceID, userID); err != nil {
+		return err
+	}
+	if stockQty >= minAlert && stockQty-qty < minAlert {
+		if err := telegram.LogEvent(ctx, tx, branchID, telegrammodels.TopicAlerts, "low_stock", "product", productID, map[string]any{
+			"sku": sku, "name": name, "stock_qty": stockQty - qty, "min_alert": minAlert,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// restoreStock returns product qty to stock and to the exact intake batches
+// this invoice drew from (newest first), so batch FIFO stays truthful.
+func (s *Service) restoreStock(ctx context.Context, tx pgx.Tx, branchID, invoiceID, productID int64, qty float64, userID *int64) error {
+	if _, err := tx.Exec(ctx, `UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2`, qty, productID); err != nil {
+		return fmt.Errorf("restore stock for product %d: %w", productID, err)
+	}
+	remaining := qty
+	rows, err := tx.Query(ctx, `
+		SELECT batch_id, -SUM(quantity_change)
+		FROM stock_movements
+		WHERE reference_type = 'invoice' AND reference_id = $1 AND reason IN ('invoice_issued', 'invoice_edited')
+		  AND product_id = $2 AND quantity_change < 0
+		GROUP BY batch_id
+		ORDER BY MAX(created_at) DESC`, invoiceID, productID)
+	if err != nil {
+		return fmt.Errorf("get consumed batches: %w", err)
+	}
+	type restore struct {
+		batchID *int64
+		qty     float64
+	}
+	var restores []restore
+	for rows.Next() {
+		var r restore
+		if err := rows.Scan(&r.batchID, &r.qty); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan consumed batch: %w", err)
+		}
+		restores = append(restores, r)
+	}
+	rows.Close()
+	for _, r := range restores {
+		if remaining <= 0 {
+			break
+		}
+		back := r.qty
+		if back > remaining {
+			back = remaining
+		}
+		remaining -= back
+		if r.batchID != nil {
+			if _, err := tx.Exec(ctx, `UPDATE batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, back, *r.batchID); err != nil {
+				return fmt.Errorf("restore batch %d: %w", *r.batchID, err)
+			}
+		}
+		if err := batch.RecordMovement(ctx, tx, branchID, productID, back, "invoice_edited", "invoice", &invoiceID, r.batchID, userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncVehicleEvents re-derives the invoice's tire/oil service events from its
+// current items. Called after any item mutation; the log is idempotent, so
+// delete-then-replay keeps the vehicle's due-for-service history exact.
+func (s *Service) syncVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, invoiceID int64) error {
+	var vehicleID *int64
+	var mileage *int
+	var issuedAt *time.Time
+	err := tx.QueryRow(ctx, `SELECT vehicle_id, mileage, issued_at FROM invoices WHERE id = $1`, invoiceID).
+		Scan(&vehicleID, &mileage, &issuedAt)
+	if err != nil {
+		return fmt.Errorf("get invoice vehicle: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM vehicle_service_events WHERE invoice_id = $1`, invoiceID); err != nil {
+		return fmt.Errorf("clear vehicle service events: %w", err)
+	}
+	if vehicleID == nil {
+		return nil
+	}
+	occurredAt := time.Now()
+	if issuedAt != nil {
+		occurredAt = *issuedAt
+	}
+	return s.logVehicleEvents(ctx, tx, branchID, *vehicleID, invoiceID, mileage, occurredAt)
 }
 
 func (s *Service) recalculateInvoice(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
@@ -776,9 +1103,30 @@ func (s *Service) recalculateInvoice(ctx context.Context, tx pgx.Tx, invoiceID i
 	totalUSD := math.Round((subtotal+taxAmount-discount)*100) / 100
 	totalKHR := math.Round(totalUSD*exchangeRate*100) / 100
 
+	// Editing a paid invoice may change the total; the recorded paid amount is
+	// what was actually received, capped at the total so the invoice never
+	// shows overpaid (staff refund any excess separately). Deriving it from the
+	// payment ledger means it recovers correctly when the total rises again.
+	var received float64
+	err = tx.QueryRow(ctx, `SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = $1`, invoiceID).Scan(&received)
+	if err != nil {
+		return fmt.Errorf("sum payments: %w", err)
+	}
+	paidAmount := received
+	if paidAmount > totalUSD {
+		paidAmount = totalUSD
+	}
+	paymentStatus := "unpaid"
+	if paidAmount >= totalUSD {
+		paymentStatus = "paid"
+	} else if paidAmount > 0 {
+		paymentStatus = "partial"
+	}
+
 	_, err = tx.Exec(ctx,
-		`UPDATE invoices SET subtotal = $1, tax_amount = $2, total_usd = $3, total_khr = $4, updated_at = NOW() WHERE id = $5`,
-		subtotal, taxAmount, totalUSD, totalKHR, invoiceID)
+		`UPDATE invoices SET subtotal = $1, tax_amount = $2, total_usd = $3, total_khr = $4,
+		                      paid_amount = $5, payment_status = $6, updated_at = NOW() WHERE id = $7`,
+		subtotal, taxAmount, totalUSD, totalKHR, paidAmount, paymentStatus, invoiceID)
 	if err != nil {
 		return fmt.Errorf("update invoice: %w", err)
 	}

@@ -80,7 +80,7 @@ func main() {
 	vehicleH := vehicleHandler.NewHandler(pool, store)
 	batchinstallH := batchinstallHandler.NewHandler(pool)
 	servicejobH := servicejobHandler.NewHandler(pool)
-	invoiceH := invoiceHandler.NewHandler(pool)
+	invoiceH := invoiceHandler.NewHandler(pool, store)
 	dashboardH := dashboardHandler.NewHandler(pool)
 	analyticsH := analyticsHandler.NewHandler(pool)
 	auditH := auditHandler.NewHandler(pool)
@@ -290,15 +290,16 @@ func main() {
 			invc.PUT("/:id", middleware.PermissionMiddleware("invoice:update"), invoiceH.Update)
 			invc.POST("/:id/void", middleware.PermissionMiddleware("invoice:void"), invoiceH.Void)
 			invc.POST("/:id/items", middleware.PermissionMiddleware("invoice:update"), invoiceH.AddItem)
+			invc.PUT("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.UpdateItem)
+			invc.DELETE("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.RemoveItem)
 			invc.GET("/:id/pdf", middleware.PermissionMiddleware("invoice:view"), invoiceH.PDF)
 			invc.POST("/:id/payments", middleware.PermissionMiddleware("invoice:update"), invoiceH.RecordPayment)
+			invc.POST("/:id/payments/:payment_id/proof", middleware.PermissionMiddleware("invoice:update"), invoiceH.UploadPaymentProof)
 			invc.GET("/:id/payments", middleware.PermissionMiddleware("invoice:view"), invoiceH.ListPayments)
 			invc.GET("/:id/returns", middleware.PermissionMiddleware("invoice:view"), returnsH.ListForInvoice)
 		}
 
 		v1.POST("/returns", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("invoice:update"), returnsH.Create)
-
-		v1.DELETE("/invoices/items/:item_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("invoice:update"), invoiceH.RemoveItem)
 
 		v1.GET("/search", middleware.AuthMiddleware(cfg.JWTSecret, pool), searchH.Search)
 

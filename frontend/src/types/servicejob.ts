@@ -29,6 +29,7 @@ export interface ServiceJobDetail extends ServiceJob {
   actual_hours?: number
   started_at?: string
   completed_at?: string
+  discount?: number
   notes?: string
   items: ServiceJobItem[]
   total_amount: number
@@ -71,6 +72,7 @@ export interface CreateServiceJobRequest {
   estimated_hours?: number
   scheduled_at?: string
   assigned_to?: number
+  discount?: number
   notes?: string
   items?: JobItemInput[]
 }

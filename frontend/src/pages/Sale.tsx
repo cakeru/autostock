@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Plus, Minus, X, Trash2, Search, Package as PackageIcon, Delete, Check, ScanLine, Percent, Scissors, ShoppingCart, ChevronUp, ChevronDown, Car, Wrench } from 'lucide-react'
@@ -6,23 +6,25 @@ import { useProducts } from '@/hooks/useProducts'
 import { productsApi } from '@/services/products'
 import { useCustomers, useCreateCustomer, useCustomerVehicles, useCreateVehicle } from '@/hooks/useCustomers'
 import { useSettings } from '@/hooks/useSettings'
-import { useCreateInvoice, useRecordPayment } from '@/hooks/useInvoices'
+import { useCreateInvoice, useRecordPayment, useUploadPaymentProof } from '@/hooks/useInvoices'
 import { useCreateServiceJob } from '@/hooks/useServiceJobs'
 import { ProductThumb, productSpec } from '@/components/inventory/ProductThumb'
 import { Button } from '@/components/ui/button'
 import { StockBadge } from '@/components/inventory/StockBadge'
 import { formatUSD } from '@/utils/currency'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { cn } from '@/lib/utils'
 import { PACKAGES, LABOR_PRESETS, FEE_PRESETS, DEFAULT_PAYMENT_METHODS, nextKey, parseDiscount, parseArraySetting } from '@/lib/packages'
 import type { CartLine, SalePackage, Preset } from '@/lib/packages'
 import type { Product } from '@/types/product'
 import type { Customer, Vehicle } from '@/types/customer'
 
-type Tab = 'packages' | 'tires' | 'parts' | 'labor' | 'fees'
+type Tab = 'packages' | 'tires' | 'parts' | 'consumables' | 'labor' | 'fees'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'packages', label: 'Packages' },
   { id: 'tires', label: 'Tires' },
   { id: 'parts', label: 'Parts' },
+  { id: 'consumables', label: 'Consumables' },
   { id: 'labor', label: 'Labor' },
   { id: 'fees', label: 'Fees' },
 ]
@@ -50,6 +52,7 @@ export function Sale() {
   const { data: settings } = useSettings()
   const createInvoice = useCreateInvoice()
   const recordPayment = useRecordPayment()
+  const uploadProof = useUploadPaymentProof()
   const createJob = useCreateServiceJob()
 
   const selectCustomer = (id: string) => { setCustomerId(id); setVehicleId(''); setMileage('') }
@@ -87,7 +90,8 @@ export function Sale() {
     const q = search.toLowerCase()
     return products.filter((p) => {
       if (tab === 'tires' && p.type !== 'tire') return false
-      if (tab === 'parts' && !(p.type === 'part' || p.type === 'consumable')) return false
+      if (tab === 'parts' && p.type !== 'part') return false
+      if (tab === 'consumables' && p.type !== 'consumable') return false
       if (!q) return true
       return p.name.toLowerCase().includes(q) || (p.tire_size || '').toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
     })
@@ -158,6 +162,7 @@ export function Sale() {
         vehicle_id: vehicleId ? parseInt(vehicleId) : undefined,
         mileage: mileageValue(),
         description: desc,
+        discount: discountAmount || undefined,
         notes: discountAmount > 0 ? `Discount discussed: ${discReason || 'negotiated'}` : undefined,
         items: cart.map((l) => ({ product_id: l.product_id, item_type: l.item_type, description: l.description, quantity: l.quantity, unit_price: l.unit_price_usd })),
       })
@@ -165,7 +170,7 @@ export function Sale() {
     } catch { /* surfaced by global onError toast */ }
   }
 
-  const submit = async (method: string | null, tender?: { currency: string; tendered_amount: number; exchange_rate: number }) => {
+  const submit = async (method: string | null, tender?: { currency: string; tendered_amount: number; exchange_rate: number }, extra?: { reference?: string; proof?: File }) => {
     try {
       const inv = await createInvoice.mutateAsync({
         customer_id: customerId ? parseInt(customerId) : undefined,
@@ -177,7 +182,10 @@ export function Sale() {
         notes: discountAmount > 0 ? `Discount: ${discReason || 'negotiated'}` : undefined,
       })
       if (method) {
-        await recordPayment.mutateAsync({ id: inv.id, data: { amount: totalUSD, method, ...(tender || {}) } })
+        const pay = await recordPayment.mutateAsync({ id: inv.id, data: { amount: totalUSD, method, reference: extra?.reference, ...(tender || {}) } })
+        if (extra?.proof) {
+          await uploadProof.mutateAsync({ invoiceId: inv.id, paymentId: pay.id, file: extra.proof })
+        }
       }
       setDone({ id: inv.id, number: inv.invoice_number })
     } catch {
@@ -231,13 +239,13 @@ export function Sale() {
           ))}
         </div>
 
-        {(tab === 'tires' || tab === 'parts') && (
+        {(tab === 'tires' || tab === 'parts' || tab === 'consumables') && (
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={tab === 'tires' ? 'Search size or name (205/55R16)…' : 'Search parts…'}
+              placeholder={tab === 'tires' ? 'Search size or name (205/55R16)…' : tab === 'consumables' ? 'Search consumables…' : 'Search parts…'}
               className="h-11 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
@@ -256,7 +264,7 @@ export function Sale() {
             </div>
           )}
 
-          {(tab === 'tires' || tab === 'parts') && (
+          {(tab === 'tires' || tab === 'parts' || tab === 'consumables') && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {filtered.length === 0 ? (
                 <p className="col-span-full py-8 text-center text-sm text-muted-foreground">No products found</p>
@@ -326,7 +334,7 @@ export function Sale() {
           )}
           {vehicleId && (
             <div className="mt-2 flex items-center gap-2">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer (km)</label>
+              <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer ({unitLabel(distanceUnit(settings))})</label>
               <input
                 value={mileage}
                 onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))}
@@ -723,18 +731,21 @@ function VehiclePicker({ value, onChange, customerId, vehicles }: {
   )
 }
 
-// --- Payment: number pad + change due ---
+// --- Payment: number pad + change due + bank-transfer reference/proof ---
 function PaymentOverlay({ totalUSD, rate, methods, pending, onCancel, onComplete }: {
   totalUSD: number
   rate: number
   methods: string[]
   pending: boolean
   onCancel: () => void
-  onComplete: (method: string | null, tender?: { currency: string; tendered_amount: number; exchange_rate: number }) => void
+  onComplete: (method: string | null, tender?: { currency: string; tendered_amount: number; exchange_rate: number }, extra?: { reference?: string; proof?: File }) => void
 }) {
   const [tendered, setTendered] = useState('')
   const [method, setMethod] = useState(methods[0] || 'cash')
   const [currency, setCurrency] = useState<'USD' | 'KHR'>('USD')
+  const [reference, setReference] = useState('')
+  const [proof, setProof] = useState<File | null>(null)
+  const proofRef = useRef<HTMLInputElement>(null)
   const tenderedNum = parseFloat(tendered) || 0
   const tenderedUSD = currency === 'USD' ? tenderedNum : tenderedNum / rate
   const change = Math.max(0, tenderedUSD - totalUSD)
@@ -743,6 +754,7 @@ function PaymentOverlay({ totalUSD, rate, methods, pending, onCancel, onComplete
     if (k === '.' && t.includes('.')) return t
     return t + k
   })
+  const isTransfer = method !== 'cash'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
@@ -763,6 +775,27 @@ function PaymentOverlay({ totalUSD, rate, methods, pending, onCancel, onComplete
             <button key={m} onClick={() => setMethod(m)} className={`min-w-[4rem] flex-1 rounded-md border py-2 text-sm font-medium capitalize transition-colors ${method === m ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}>{m}</button>
           ))}
         </div>
+
+        {isTransfer && (
+          <div className="mt-3 space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Trx ID (ABA) — optional</label>
+              <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. TRX-8F2K1L9Q"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Proof photo — optional</label>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => proofRef.current?.click()}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm hover:bg-muted">
+                  {proof ? proof.name.slice(0, 24) : 'Choose photo…'}
+                </button>
+                {proof && <button type="button" onClick={() => { setProof(null); if (proofRef.current) proofRef.current.value = '' }} className="text-xs text-muted-foreground hover:text-destructive">Remove</button>}
+              </div>
+              <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={(e) => setProof(e.target.files?.[0] || null)} />
+            </div>
+          </div>
+        )}
 
         {method === 'cash' && (
           <>
@@ -793,7 +826,7 @@ function PaymentOverlay({ totalUSD, rate, methods, pending, onCancel, onComplete
         )}
 
         <div className="mt-3 flex flex-col gap-2">
-          <Button className="h-11" disabled={pending} onClick={() => onComplete(method, method === 'cash' ? { currency, tendered_amount: tenderedNum, exchange_rate: rate } : undefined)}>
+          <Button className="h-11" disabled={pending} onClick={() => onComplete(method, method === 'cash' ? { currency, tendered_amount: tenderedNum, exchange_rate: rate } : undefined, { reference: reference.trim() || undefined, proof: proof || undefined })}>
             {pending ? 'Completing…' : `Mark paid — ${method}`}
           </Button>
           <Button variant="outline" disabled={pending} onClick={() => onComplete(null)}>

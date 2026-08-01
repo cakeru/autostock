@@ -12,6 +12,8 @@ import { VehicleForm } from '@/components/customer/VehicleForm'
 import { CurrentCondition } from '@/components/vehicle/CurrentCondition'
 import { ServiceHistory } from '@/components/vehicle/ServiceHistory'
 import { formatDate } from '@/utils/date'
+import { useSettings } from '@/hooks/useSettings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { imageSrc } from '@/utils/imageUrl'
 import { useUpdateVehicle } from '@/hooks/useCustomers'
 import {
@@ -26,7 +28,9 @@ export function VehicleDetail() {
   const navigate = useNavigate()
   const vehicleId = parseInt(id || '0')
 
+  const { data: settings } = useSettings()
   const { data: vehicle, isLoading } = useVehicleProfile(vehicleId)
+  const unit = unitLabel(distanceUnit(settings))
   const updateVehicle = useUpdateVehicle()
   const createRecord = useCreateVehicleRecord(vehicleId)
   const createServiceEvent = useCreateServiceEvent(vehicleId)
@@ -83,7 +87,7 @@ export function VehicleDetail() {
         <div className="bg-card rounded-lg p-5 shadow-sm space-y-1.5">
           <p className="text-sm font-semibold flex items-center gap-1.5"><Gauge className="h-4 w-4" /> Last known</p>
           <p className="text-sm text-muted-foreground">
-            {vehicle.last_mileage != null ? `${vehicle.last_mileage.toLocaleString()} km` : 'No mileage recorded'}
+            {vehicle.last_mileage != null ? `${vehicle.last_mileage.toLocaleString()} {unit}` : 'No mileage recorded'}
           </p>
           <p className="text-sm text-muted-foreground">
             {vehicle.last_service_at ? formatDate(vehicle.last_service_at) : 'No service history'}
@@ -125,6 +129,7 @@ export function VehicleDetail() {
 
       {showAddRecord && (
         <AddRecordDialog
+          unit={unit}
           onClose={() => setShowAddRecord(false)}
           onCreate={(data) => createRecord.mutate(data, { onSuccess: () => setShowAddRecord(false) })}
           loading={createRecord.isPending}
@@ -133,6 +138,7 @@ export function VehicleDetail() {
 
       {logType && (
         <LogServiceEventDialog
+          unit={unit}
           eventType={logType}
           onClose={() => setLogType(null)}
           onCreate={(data) => createServiceEvent.mutate(data, { onSuccess: () => setLogType(null) })}
@@ -143,6 +149,7 @@ export function VehicleDetail() {
       {showIntervals && (
         <IntervalsDialog
           vehicle={vehicle}
+          unit={unit}
           onClose={() => setShowIntervals(false)}
           onSave={(data) => updateIntervals.mutate(data, { onSuccess: () => setShowIntervals(false) })}
           loading={updateIntervals.isPending}
@@ -165,7 +172,8 @@ export function VehicleDetail() {
   )
 }
 
-function AddRecordDialog({ onClose, onCreate, loading }: {
+function AddRecordDialog({ unit, onClose, onCreate, loading }: {
+  unit: string
   onClose: () => void
   onCreate: (data: { note?: string; mileage?: number }) => void
   loading: boolean
@@ -182,7 +190,7 @@ function AddRecordDialog({ onClose, onCreate, loading }: {
         </p>
         <div className="space-y-2">
           <div className="space-y-1">
-            <Label>Odometer (km)</Label>
+            <Label>Odometer ({unit})</Label>
             <Input value={mileage} onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 87450" />
           </div>
           <div className="space-y-1">
@@ -230,10 +238,10 @@ function DueCard({ due, onLog }: { due: DueStatus; onLog: () => void }) {
         <p className="mt-1.5 text-xs text-muted-foreground">No {due.event_type} sale or record logged yet for this car.</p>
       ) : (
         <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
-          <p>Last: {due.last_service_at ? formatDate(due.last_service_at) : '—'}{due.last_mileage != null ? ` · ${due.last_mileage.toLocaleString()} km` : ''}</p>
+          <p>Last: {due.last_service_at ? formatDate(due.last_service_at) : '—'}{due.last_mileage != null ? ` · ${due.last_mileage.toLocaleString()} {unit}` : ''}</p>
           <p>
             Next due: {due.due_date ? formatDate(due.due_date) : '—'}
-            {due.due_mileage != null ? ` · by ${due.due_mileage.toLocaleString()} km` : ''}
+            {due.due_mileage != null ? ` · by ${due.due_mileage.toLocaleString()} {unit}` : ''}
           </p>
         </div>
       )}
@@ -244,7 +252,8 @@ function DueCard({ due, onLog }: { due: DueStatus; onLog: () => void }) {
   )
 }
 
-function LogServiceEventDialog({ eventType, onClose, onCreate, loading }: {
+function LogServiceEventDialog({ unit, eventType, onClose, onCreate, loading }: {
+  unit: string
   eventType: ServiceEventType
   onClose: () => void
   onCreate: (data: { event_type: ServiceEventType; mileage?: number; occurred_at?: string; product_name?: string; life_km?: number }) => void
@@ -268,7 +277,7 @@ function LogServiceEventDialog({ eventType, onClose, onCreate, loading }: {
             <Input value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} type="date" />
           </div>
           <div className="space-y-1">
-            <Label>Odometer (km)</Label>
+            <Label>Odometer ({unit})</Label>
             <Input value={mileage} onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 87450" />
           </div>
           <div className="space-y-1">
@@ -277,9 +286,9 @@ function LogServiceEventDialog({ eventType, onClose, onCreate, loading }: {
           </div>
           {eventType === 'tire' && (
             <div className="space-y-1">
-              <Label>Tire life (km)</Label>
+              <Label>Tire life ({unit})</Label>
               <Input value={lifeKm} onChange={(e) => setLifeKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="Shop default if blank" />
-              <p className="text-[11px] text-muted-foreground">How many km these tires should last before the next change.</p>
+              <p className="text-[11px] text-muted-foreground">How many {unit} these tires should last before the next change.</p>
             </div>
           )}
         </div>
@@ -297,8 +306,9 @@ function LogServiceEventDialog({ eventType, onClose, onCreate, loading }: {
   )
 }
 
-function IntervalsDialog({ vehicle, onClose, onSave, loading }: {
+function IntervalsDialog({ vehicle, unit, onClose, onSave, loading }: {
   vehicle: { oil_interval_km?: number; oil_interval_days?: number; tire_interval_km?: number; tire_interval_days?: number }
+  unit: string
   onClose: () => void
   onSave: (data: UpdateVehicleIntervalsRequest) => void
   loading: boolean
@@ -314,23 +324,23 @@ function IntervalsDialog({ vehicle, onClose, onSave, loading }: {
       <div className="w-full max-w-sm rounded-lg bg-card p-5 shadow-lg">
         <p className="mb-1 text-sm font-semibold">Reminder Overrides for This Vehicle</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Leave blank to use the shop defaults. Set a <span className="font-medium text-foreground">days</span> interval for a firm calendar due date; a <span className="font-medium text-foreground">km</span> interval is projected from how far the car is driven.
+          Leave blank to use the shop defaults. Set a <span className="font-medium text-foreground">days</span> interval for a firm calendar due date; a <span className="font-medium text-foreground">{unit}</span> interval is projected from how far the car is driven.
         </p>
         <div className="space-y-4">
           <div>
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Oil change</Label>
             <div className="mt-1 grid grid-cols-2 gap-2">
-              <Input value={oilKm} onChange={(e) => setOilKm(num(e.target.value))} inputMode="numeric" placeholder="km (default)" />
+              <Input value={oilKm} onChange={(e) => setOilKm(num(e.target.value))} inputMode="numeric" placeholder={`${unit} (default)`} />
               <Input value={oilDays} onChange={(e) => setOilDays(num(e.target.value))} inputMode="numeric" placeholder="days (e.g. 90)" />
             </div>
           </div>
           <div>
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tires</Label>
             <div className="mt-1 grid grid-cols-2 gap-2">
-              <Input value={tireKm} onChange={(e) => setTireKm(num(e.target.value))} inputMode="numeric" placeholder="km life (default)" />
+              <Input value={tireKm} onChange={(e) => setTireKm(num(e.target.value))} inputMode="numeric" placeholder={`${unit} life (default)`} />
               <Input value={tireDays} onChange={(e) => setTireDays(num(e.target.value))} inputMode="numeric" placeholder="days (optional)" />
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">km life is used when a sold tire has no rated life of its own. Whichever limit comes first wins.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{unit} life is used when a sold tire has no rated life of its own. Whichever limit comes first wins.</p>
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-4">

@@ -34,10 +34,19 @@ type InvoiceItemReq struct {
 	UnitPriceUSD float64 `json:"unit_price_usd" binding:"required,gte=0"`
 }
 
+type UpdateInvoiceItemRequest struct {
+	Description  *string  `json:"description,omitempty"`
+	Quantity     *float64 `json:"quantity,omitempty" binding:"omitempty,gt=0"`
+	UnitPriceUSD *float64 `json:"unit_price_usd,omitempty" binding:"omitempty,gte=0"`
+}
+
 type UpdateInvoiceRequest struct {
 	PaymentMethod *string `json:"payment_method,omitempty"`
 	PaymentNotes  *string `json:"payment_notes,omitempty"`
 	Notes         *string `json:"notes,omitempty"`
+	VehicleID     *int64  `json:"vehicle_id,omitempty"`
+	Mileage       *int    `json:"mileage,omitempty"`
+	ClearVehicle  bool    `json:"clear_vehicle,omitempty"`
 }
 
 type RecordPaymentRequest struct {
@@ -47,6 +56,7 @@ type RecordPaymentRequest struct {
 	Currency       string  `json:"currency,omitempty"`        // USD | KHR (how it was tendered)
 	TenderedAmount float64 `json:"tendered_amount,omitempty"` // amount in the tendered currency
 	ExchangeRate   float64 `json:"exchange_rate,omitempty"`   // KHR per USD used
+	Reference      string  `json:"reference,omitempty"`       // bank/wallet transfer Trx ID (e.g. ABA)
 }
 
 type PaymentResponse struct {
@@ -58,6 +68,8 @@ type PaymentResponse struct {
 	TenderedAmount *float64  `json:"tendered_amount,omitempty"`
 	ReceivedByName string    `json:"received_by_name,omitempty"`
 	Notes          string    `json:"notes,omitempty"`
+	Reference      string    `json:"reference,omitempty"`
+	ProofURL       string    `json:"proof_url,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 

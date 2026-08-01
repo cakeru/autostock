@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE service_jobs DROP COLUMN IF EXISTS discount;
+
+COMMIT;

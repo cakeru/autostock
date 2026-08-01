@@ -18,9 +18,10 @@ export interface ProductFormProps {
   onSubmit: (data: CreateProductRequest, image?: ProductImageIntent) => void
   onCancel: () => void
   loading?: boolean
+  distanceUnitLabel?: string
 }
 
-export function ProductForm({ initial, onSubmit, onCancel, loading }: ProductFormProps) {
+export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnitLabel = 'km' }: ProductFormProps) {
   const [type, setType] = useState(initial?.type || 'tire')
   const [sku, setSku] = useState(initial?.sku || '')
   const [barcode, setBarcode] = useState(initial?.barcode || '')
@@ -245,7 +246,7 @@ export function ProductForm({ initial, onSubmit, onCancel, loading }: ProductFor
               <Input value={tireSize} onChange={(e) => setTireSize(e.target.value)} placeholder="205/55R16" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Rated life (km)</Label>
+              <Label className="text-xs">Rated life ({distanceUnitLabel})</Label>
               <Input value={ratedLifeKm} onChange={(e) => setRatedLifeKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 60000" />
               <p className="text-[11px] text-muted-foreground">Drives the tire-change reminder when this tire is sold.</p>
             </div>

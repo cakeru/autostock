@@ -8,6 +8,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useReceiveStock, useAdjustStock, useUploadProductImage, useDeleteProductImage, useImportProducts } from '@/hooks/useProducts'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useSuppliers } from '@/hooks/useSuppliers'
+import { useSettings } from '@/hooks/useSettings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { StockBadge } from '@/components/inventory/StockBadge'
 import { ProductForm, type ProductFormProps } from '@/components/inventory/ProductForm'
 import { Button } from '@/components/ui/button'
@@ -52,6 +54,7 @@ export function Inventory() {
     stock_quantity_lt: lowStockOnly ? 5 : undefined,
   }
 
+  const { data: settings } = useSettings()
   const { data, isLoading, error } = useProducts(params)
   const createMutation = useCreateProduct()
   const updateMutation = useUpdateProduct()
@@ -315,6 +318,7 @@ export function Inventory() {
           onSubmit={handleSubmit}
           onCancel={() => { setShowForm(false); setEditing(null) }}
           loading={createMutation.isPending || updateMutation.isPending || uploadImage.isPending || deleteImage.isPending}
+          distanceUnitLabel={unitLabel(distanceUnit(settings))}
         />
       </SlideOver>
 

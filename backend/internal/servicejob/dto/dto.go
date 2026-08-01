@@ -23,6 +23,7 @@ type CreateServiceJobRequest struct {
 	EstimatedHours float64        `json:"estimated_hours,omitempty"`
 	ScheduledAt    string         `json:"scheduled_at,omitempty"` // RFC3339 / ISO datetime; empty = walk-in
 	AssignedTo     *int64         `json:"assigned_to,omitempty"`
+	Discount       float64        `json:"discount,omitempty"` // agreed whole-sale discount, carried to the invoice
 	Notes          string         `json:"notes,omitempty"`
 	Items          []JobItemInput `json:"items,omitempty"`
 }
@@ -110,6 +111,7 @@ type ServiceJobDetailResponse struct {
 	InvoiceID       *int64                    `json:"invoice_id,omitempty"`
 	QuoteApprovedAt *time.Time                `json:"quote_approved_at,omitempty"`
 	QuoteApprovedBy *int64                    `json:"quote_approved_by,omitempty"`
+	Discount        float64                   `json:"discount,omitempty"`
 	Notes           string                    `json:"notes,omitempty"`
 	Items           []ServiceJobItemResponse  `json:"items"`
 	TotalAmount     float64                   `json:"total_amount"`

@@ -1,5 +1,6 @@
 import type { InvoiceDetail } from '@/types/invoice'
 import type { Settings } from '@/services/settings'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { BrandMark } from '@/components/layout/BrandMark'
 
 const usd = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -41,16 +42,16 @@ export function PrintReceipt({
   capture?: boolean
 }) {
   const shop = shopFrom(settings)
-  if (format === 'a4') return <InvoiceA4 invoice={invoice} shop={shop} capture={capture} />
-  if (format === 'classic') return <ClassicInvoice invoice={invoice} />
-  return <ThermalReceipt invoice={invoice} shop={shop} />
+  if (format === 'a4') return <InvoiceA4 invoice={invoice} shop={shop} settings={settings} capture={capture} />
+  if (format === 'classic') return <ClassicInvoice invoice={invoice} settings={settings} />
+  return <ThermalReceipt invoice={invoice} shop={shop} settings={settings} />
 }
 
 /* ------------------------------------------------------------------ */
 /* 80mm thermal receipt                                                */
 /* ------------------------------------------------------------------ */
 
-function ThermalReceipt({ invoice, shop }: { invoice: InvoiceDetail; shop: Shop }) {
+function ThermalReceipt({ invoice, shop, settings }: { invoice: InvoiceDetail; shop: Shop; settings?: Settings }) {
   return (
     <div className="hidden print:block mx-auto w-[72mm] text-black text-[12px] leading-snug font-mono">
       <style>{`@page { size: 80mm auto; margin: 4mm; }`}</style>
@@ -66,7 +67,7 @@ function ThermalReceipt({ invoice, shop }: { invoice: InvoiceDetail; shop: Shop 
         <div className="flex justify-between"><span>Date</span><span>{issuedDate(invoice).toLocaleString()}</span></div>
         {invoice.customer_name && <div className="flex justify-between"><span>Customer</span><span>{invoice.customer_name}</span></div>}
         {invoice.plate_number && <div className="flex justify-between"><span>Vehicle</span><span>{invoice.plate_number}</span></div>}
-        {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} km</span></div>}
+        {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</span></div>}
         {invoice.job_number && <div className="flex justify-between"><span>Job</span><span>{invoice.job_number}</span></div>}
       </div>
 
@@ -126,7 +127,7 @@ function MetaLine({ kh, value, align = 'left' }: { kh: string; value?: string; a
   )
 }
 
-function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
+function ClassicInvoice({ invoice, settings }: { invoice: InvoiceDetail; settings?: Settings }) {
   const MIN_ROWS = 10
   const rows: Array<{ description: string; quantity: number; unit_price_usd: number; total_usd: number } | null> = [
     ...invoice.items,
@@ -140,12 +141,17 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
 
   return (
     <div className="kh-invoice hidden print:block w-full text-black text-[12px]">
-      {/* @page margin:0 suppresses the browser-injected header/footer (date, page
-          title, URL); the page margin is applied as padding instead. print-color-adjust
-          forces the black header + zebra-striped rows to actually render on paper. */}
+      {/* A5 portrait — the shop prints this form on A5 paper. @page margin:0
+          suppresses the browser-injected header/footer; page margins are applied
+          as padding instead. print-color-adjust forces the black header and
+          zebra-striped rows to render on paper. */}
       <style>{`
-        @page { size: A4; margin: 0; }
-        .kh-invoice { padding: 15mm; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { size: A5 portrait; margin: 0; }
+        .kh-invoice { padding: 10mm 12mm; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .kh-invoice h1 { font-size: 18px; margin-bottom: 4mm; }
+        .kh-invoice table { font-size: 11px; }
+        .kh-invoice th { padding: 1.5mm 2mm; }
+        .kh-invoice td { padding: 1.2mm 2mm; }
       `}</style>
 
       <h1 className="mb-5 text-center text-[22px] font-bold">Invoice</h1>
@@ -161,7 +167,7 @@ function ClassicInvoice({ invoice }: { invoice: InvoiceDetail }) {
           <MetaLine kh="កាលបរិច្ឆេទៈ" value={shortDate(issuedDate(invoice))} align="right" />
           <MetaLine kh="អត្រាៈ" value={`$1 = ${Math.round(invoice.exchange_rate).toLocaleString()} ៛`} align="right" />
           <MetaLine kh="ទូរស័ព្ទអតិថិជនៈ" value={invoice.customer_phone} align="right" />
-          <MetaLine kh="គីឡូម៉ែត្រប្រើប្រាស់ៈ" value={invoice.mileage != null ? `${invoice.mileage.toLocaleString()} km` : undefined} align="right" />
+          <MetaLine kh="គីឡូម៉ែត្រប្រើប្រាស់ៈ" value={invoice.mileage != null ? `${invoice.mileage.toLocaleString()} ${unitLabel(distanceUnit(settings))}` : undefined} align="right" />
         </div>
       </div>
 
@@ -233,7 +239,7 @@ const GOLD = 'var(--color-brand-gold)'
 // Force background/borders to render when printing.
 const exact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as const
 
-function InvoiceA4({ invoice, shop, capture }: { invoice: InvoiceDetail; shop: Shop; capture?: boolean }) {
+function InvoiceA4({ invoice, shop, settings, capture }: { invoice: InvoiceDetail; shop: Shop; settings?: Settings; capture?: boolean }) {
   const voided = invoice.status === 'voided'
   return (
     <div className={`relative mx-auto w-full max-w-[190mm] text-[11px] text-black ${capture ? 'block' : 'hidden print:block'}`} style={exact}>
@@ -271,7 +277,7 @@ function InvoiceA4({ invoice, shop, capture }: { invoice: InvoiceDetail; shop: S
                 {invoice.vehicle_info}{invoice.plate_number ? ` · ${invoice.plate_number}` : ''}
               </p>
             )}
-            {invoice.mileage != null && <p className="text-black/70">Odometer: {invoice.mileage.toLocaleString()} km</p>}
+            {invoice.mileage != null && <p className="text-black/70">Odometer: {invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</p>}
             {invoice.job_number && <p className="text-black/70">Job: {invoice.job_number}</p>}
           </div>
           <div className="text-right">

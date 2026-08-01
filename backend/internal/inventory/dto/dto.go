@@ -39,6 +39,7 @@ type CreateProductRequest struct {
 }
 
 type UpdateProductRequest struct {
+	Type          *string  `json:"type,omitempty" binding:"omitempty,oneof=tire part labor consumable"`
 	Barcode       *string  `json:"barcode,omitempty"`
 	Name          *string  `json:"name,omitempty"`
 	Description   *string  `json:"description,omitempty"`

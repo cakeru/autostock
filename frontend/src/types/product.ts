@@ -123,6 +123,7 @@ export interface CreateProductRequest {
 }
 
 export interface UpdateProductRequest {
+	type?: string
 	barcode?: string
 	name?: string
 	description?: string

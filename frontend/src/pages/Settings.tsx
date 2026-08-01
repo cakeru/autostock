@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSettings, useUpdateSetting, useBatchUpdateSettings, useUpdateExchangeRate } from '@/hooks/useSettings'
 import { useIntervalSettings, useUpdateIntervalSettings } from '@/hooks/useVehicleProfile'
 import type { PartRule } from '@/types/vehicleProfile'
+import { distanceUnit, unitLabel } from '@/utils/units'
 import { Trash2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,10 @@ export function Settings() {
   const [batchScan, setBatchScan] = useState(false)
   const batchScanSave = useUpdateSetting()
 
+  const [distanceUnitValue, setDistanceUnitValue] = useState('km')
+  const distanceUnitSave = useUpdateSetting()
+  const distanceUnitSaved = useSavedTimeout()
+
   const [shopName, setShopName] = useState('K&S Wheel-Tyre')
   const [shopAddress, setShopAddress] = useState('')
   const [shopPhone, setShopPhone] = useState('')
@@ -57,6 +62,7 @@ export function Settings() {
       setInvoicePrefix(settings.invoice_prefix)
       setLowStock(settings.low_stock_threshold.toString())
       setBatchScan(!!settings.feature_batch_scan)
+      setDistanceUnitValue(settings.distance_unit === 'mi' ? 'mi' : 'km')
       setShopName(settings.shop_name || 'K&S Wheel-Tyre')
       setShopAddress(settings.shop_address || '')
       setShopPhone(settings.shop_phone || '')
@@ -156,6 +162,23 @@ export function Settings() {
             loading={taxSave.isPending}
             saved={taxSaved.saved}
             error={taxSave.isError}
+          />
+        </div>
+      </Section>
+
+      <Section title="Distance Units" description="The unit used for odometer readings and service intervals (sale, invoices, vehicle profiles)">
+        <div className="flex items-center gap-2">
+          <Select value={distanceUnitValue} onChange={(e) => setDistanceUnitValue(e.target.value)} className="w-36">
+            <option value="km">Kilometers (km)</option>
+            <option value="mi">Miles (mi)</option>
+          </Select>
+          <SaveButton
+            onClick={() => {
+              distanceUnitSave.mutate({ key: 'distance_unit', value: distanceUnitValue }, { onSuccess: distanceUnitSaved.trigger })
+            }}
+            loading={distanceUnitSave.isPending}
+            saved={distanceUnitSaved.saved}
+            error={distanceUnitSave.isError}
           />
         </div>
       </Section>
@@ -339,6 +362,8 @@ function NumBox({ value, onChange, unit, min = '0' }: { value: string; onChange:
 }
 
 function ServiceIntervalsEditor() {
+  const { data: settings } = useSettings()
+  const unit = distanceUnit(settings)
   const { data: intervals, isLoading } = useIntervalSettings()
   const save = useUpdateIntervalSettings()
   const saved = useSavedTimeout()
@@ -379,7 +404,7 @@ function ServiceIntervalsEditor() {
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Oil change — due at whichever comes first</p>
           <div className="grid grid-cols-2 gap-2">
-            <NumBox value={oilKm} onChange={setOilKm} unit="km" />
+            <NumBox value={oilKm} onChange={setOilKm} unit={unit} />
             <NumBox value={oilDays} onChange={setOilDays} unit="days" />
           </div>
         </div>
@@ -387,11 +412,11 @@ function ServiceIntervalsEditor() {
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tires — due at whichever comes first</p>
           <div className="grid grid-cols-2 gap-2">
-            <NumBox value={tireLifeKm} onChange={setTireLifeKm} unit="km default life" />
+            <NumBox value={tireLifeKm} onChange={setTireLifeKm} unit={`${unit} default life`} />
             <NumBox value={tireDays} onChange={setTireDays} unit="days (optional)" />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            km life is a fallback used when a sold tire has no rated life set on its product. Days is optional — set it to also flag tires by age (a firm calendar date); leave blank to judge by wear-to-km only.
+            {unit} life is a fallback used when a sold tire has no rated life set on its product. Days is optional — set it to also flag tires by age (a firm calendar date); leave blank to judge by wear-to-{unit} only.
           </p>
         </div>
 
@@ -402,7 +427,7 @@ function ServiceIntervalsEditor() {
           </p>
           <div className="space-y-2">
             <div className="grid grid-cols-[1fr_5rem_5rem_2rem] items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              <span>Part key</span><span>km</span><span>days</span><span />
+              <span>Part key</span><span>{unit}</span><span>days</span><span />
             </div>
             {partRules.map((r, i) => (
               <div key={i} className="grid grid-cols-[1fr_5rem_5rem_2rem] items-center gap-2">
@@ -422,11 +447,11 @@ function ServiceIntervalsEditor() {
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimation</p>
           <div className="grid grid-cols-2 gap-2">
-            <NumBox value={fallbackKmPerDay} onChange={setFallbackKmPerDay} unit="km/day fallback" min="1" />
+            <NumBox value={fallbackKmPerDay} onChange={setFallbackKmPerDay} unit={`${unit}/day fallback`} min="1" />
             <NumBox value={dueSoonDays} onChange={setDueSoonDays} unit={'"due soon" window (days)'} />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            The km/day fallback estimates today's odometer for a vehicle with too little visit history to project from.
+            The {unit}/day fallback estimates today's odometer for a vehicle with too little visit history to project from.
           </p>
         </div>
 

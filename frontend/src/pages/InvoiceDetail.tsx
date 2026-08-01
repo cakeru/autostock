@@ -3,9 +3,12 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDateTime } from '@/utils/date'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Printer, Receipt, Undo2, Send } from 'lucide-react'
+import { toast } from 'sonner'
+import { Printer, Receipt, Undo2, Send, Pencil, Trash2, X, FileImage } from 'lucide-react'
 import { useSendToTelegram } from '@/hooks/useSendToTelegram'
-import { useInvoice, useUpdateInvoice, useVoidInvoice, useRecordPayment } from '@/hooks/useInvoices'
+import { useInvoice, useUpdateInvoice, useVoidInvoice, useRecordPayment, useUploadPaymentProof, useUpdateInvoiceItem, useAddInvoiceItem, useRemoveInvoiceItem } from '@/hooks/useInvoices'
+import { useCustomerVehicles } from '@/hooks/useCustomers'
+import { useProducts } from '@/hooks/useProducts'
 import { useInvoiceReturns } from '@/hooks/useReturns'
 import { ReturnDialog } from '@/components/invoice/ReturnDialog'
 import { useSettings } from '@/hooks/useSettings'
@@ -14,7 +17,10 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { InvoiceStatusBadge } from '@/components/invoice/StatusBadge'
 import { PrintReceipt, type PrintFormat } from '@/components/invoice/PrintReceipt'
-import type { RecordPaymentRequest } from '@/types/invoice'
+import { imageSrc } from '@/utils/imageUrl'
+import { distanceUnit, unitLabel } from '@/utils/units'
+import type { RecordPaymentRequest, UpdateInvoiceRequest, UpdateInvoiceItemRequest, InvoiceDetail } from '@/types/invoice'
+import type { Product } from '@/types/product'
 import { parseArraySetting, DEFAULT_PAYMENT_METHODS } from '@/lib/packages'
 
 export function InvoiceDetail() {
@@ -28,11 +34,18 @@ export function InvoiceDetail() {
   const updateMutation = useUpdateInvoice()
   const voidMutation = useVoidInvoice()
   const recordPaymentMutation = useRecordPayment()
+  const uploadProofMutation = useUploadPaymentProof()
+  const updateItemMutation = useUpdateInvoiceItem()
+  const addItemMutation = useAddInvoiceItem()
+  const removeItemMutation = useRemoveInvoiceItem()
 
   const [voidReason, setVoidReason] = useState('')
   const [showVoid, setShowVoid] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [showReturn, setShowReturn] = useState(false)
+  const [showVehicleEdit, setShowVehicleEdit] = useState(false)
+  const [showItemsEdit, setShowItemsEdit] = useState(false)
+  const [lightbox, setLightbox] = useState('')
   const { data: returnsData } = useInvoiceReturns(invoiceId)
   const [printFormat, setPrintFormat] = useState<PrintFormat | null>(null)
   const captureRef = useRef<HTMLDivElement>(null)
@@ -66,10 +79,15 @@ export function InvoiceDetail() {
     )
   }
 
-  const handleRecordPayment = (data: RecordPaymentRequest) => {
+  const handleRecordPayment = (data: RecordPaymentRequest, proof?: File) => {
     recordPaymentMutation.mutate(
       { id: invoiceId, data },
-      { onSuccess: () => setShowPayment(false) }
+      {
+        onSuccess: (pay) => {
+          if (proof) uploadProofMutation.mutate({ invoiceId, paymentId: pay.id, file: proof })
+          setShowPayment(false)
+        },
+      }
     )
   }
 
@@ -128,7 +146,14 @@ export function InvoiceDetail() {
         {/* Main column */}
         <div className="space-y-4 lg:col-span-2">
           <div className="bg-card rounded-lg p-5 shadow-sm">
-            <p className="text-sm font-semibold mb-2">Items</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold">Items</p>
+              {invoice.status !== 'voided' && (
+                <Button size="sm" variant="ghost" onClick={() => setShowItemsEdit(true)} className="h-7 gap-1 px-2 text-xs -mr-1">
+                  <Pencil className="h-3 w-3" /> Edit items
+                </Button>
+              )}
+            </div>
             {invoice.items.length === 0 ? (
               <p className="text-sm text-muted-foreground">No items</p>
             ) : (
@@ -162,11 +187,19 @@ export function InvoiceDetail() {
                 <div className="text-sm space-y-1">
                   {payments.map((p) => (
                     <div key={p.id} className="flex justify-between py-1 border-b last:border-0">
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-medium">${p.amount.toFixed(2)}</span>
                         <span className="text-muted-foreground ml-1 text-xs">{p.method}</span>
                         {p.currency === 'KHR' && p.tendered_amount ? <span className="text-muted-foreground ml-1 text-xs">(៛{Math.round(p.tendered_amount).toLocaleString()})</span> : null}
                         {p.received_by_name && <span className="text-muted-foreground ml-1 text-xs">by {p.received_by_name}</span>}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {p.reference && <span className="font-mono">{p.reference}</span>}
+                          {p.proof_url && (
+                            <button onClick={() => setLightbox(p.proof_url!)} className="flex items-center gap-1 text-primary hover:underline">
+                              <FileImage className="h-3 w-3" /> Proof
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(p.created_at)}</span>
                     </div>
@@ -209,7 +242,14 @@ export function InvoiceDetail() {
         {/* Rail */}
         <div className="space-y-4 lg:col-span-1">
           <div className="bg-card rounded-lg p-5 shadow-sm space-y-1.5">
-            <p className="text-sm font-semibold">Customer</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Customer</p>
+              {invoice.customer_id && (
+                <Button size="sm" variant="ghost" onClick={() => setShowVehicleEdit(true)} className="h-7 gap-1 px-2 text-xs -mr-1">
+                  <Pencil className="h-3 w-3" /> Edit
+                </Button>
+              )}
+            </div>
             <p className="text-sm font-medium">{invoice.customer_name || 'Walk-in'}</p>
             {invoice.customer_phone && <p className="text-sm">{invoice.customer_phone}</p>}
             {invoice.plate_number && (
@@ -226,7 +266,7 @@ export function InvoiceDetail() {
                 </p>
               )
             )}
-            {invoice.mileage != null && <p className="text-sm text-muted-foreground">Odometer: {invoice.mileage.toLocaleString()} km</p>}
+            {invoice.mileage != null && <p className="text-sm text-muted-foreground">Odometer: {invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</p>}
             {invoice.job_number && <p className="text-sm text-muted-foreground">Job: {invoice.job_number}</p>}
           </div>
 
@@ -270,13 +310,47 @@ export function InvoiceDetail() {
 
       {showPayment && (
         <RecordPaymentDialog
+          invoiceId={invoiceId}
           invoiceNumber={invoice.invoice_number}
           owed={owed}
           rate={settings?.exchange_rate_usd_khr || 4050}
           methods={paymentMethods}
           onClose={() => setShowPayment(false)}
           onConfirm={handleRecordPayment}
-          loading={recordPaymentMutation.isPending}
+          loading={recordPaymentMutation.isPending || uploadProofMutation.isPending}
+        />
+      )}
+
+      {showItemsEdit && (
+        <ItemEditorDialog
+          invoice={invoice}
+          onClose={() => setShowItemsEdit(false)}
+          onUpdateItem={(itemId, data) => updateItemMutation.mutate({ id: invoiceId, itemId, data })}
+          onAddItem={(data) => addItemMutation.mutate({ id: invoiceId, data })}
+          onRemoveItem={(itemId) => removeItemMutation.mutate({ id: invoiceId, itemId })}
+          pending={updateItemMutation.isPending || addItemMutation.isPending || removeItemMutation.isPending}
+        />
+      )}
+
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox('')}>
+          <img src={imageSrc(lightbox)} alt="Payment proof" className="max-h-[85vh] max-w-full rounded-lg" />
+          <button className="absolute right-4 top-4 text-white/80 hover:text-white" onClick={() => setLightbox('')} aria-label="Close">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+      )}
+
+      {showVehicleEdit && (
+        <EditVehicleDialog
+          invoice={invoice}
+          unitLabel={unitLabel(distanceUnit(settings))}
+          onClose={() => setShowVehicleEdit(false)}
+          onSave={(data) => updateMutation.mutate(
+            { id: invoiceId, data },
+            { onSuccess: () => setShowVehicleEdit(false) }
+          )}
+          loading={updateMutation.isPending}
         />
       )}
 
@@ -292,13 +366,65 @@ export function InvoiceDetail() {
   )
 }
 
-function RecordPaymentDialog({ invoiceNumber, owed, rate, methods, onClose, onConfirm, loading }: {
+function EditVehicleDialog({ invoice, unitLabel, onClose, onSave, loading }: {
+  invoice: InvoiceDetail
+  unitLabel: string
+  onClose: () => void
+  onSave: (data: UpdateInvoiceRequest) => void
+  loading: boolean
+}) {
+  const { data: vehicles } = useCustomerVehicles(invoice.customer_id || 0)
+  const [vehicleId, setVehicleId] = useState(invoice.vehicle_id ? String(invoice.vehicle_id) : '')
+  const [mileage, setMileage] = useState(invoice.mileage != null ? String(invoice.mileage) : '')
+
+  const submit = () => {
+    onSave({
+      vehicle_id: vehicleId ? parseInt(vehicleId) : undefined,
+      clear_vehicle: !vehicleId,
+      mileage: mileage ? parseInt(mileage) : undefined,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-card rounded-lg p-5 shadow-lg w-full max-w-sm mx-4">
+        <p className="text-sm font-semibold mb-1">Edit vehicle</p>
+        <p className="text-xs text-muted-foreground mb-3">{invoice.invoice_number}</p>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Vehicle</label>
+            <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+              <option value="">No vehicle</option>
+              {(vehicles || []).map((v) => (
+                <option key={v.id} value={v.id}>{v.plate_number}{v.make || v.model ? ` — ${[v.make, v.model].filter(Boolean).join(' ')}` : ''}</option>
+              ))}
+            </Select>
+            {(!vehicles || vehicles.length === 0) && (
+              <p className="text-xs text-muted-foreground">No vehicles registered for this customer.</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Odometer ({unitLabel})</label>
+            <Input value={mileage} onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 85000" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={loading}>{loading ? 'Saving...' : 'Save'}</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, onClose, onConfirm, loading }: {
+  invoiceId: number
   invoiceNumber: string
   owed: number
   rate: number
   methods: string[]
   onClose: () => void
-  onConfirm: (data: RecordPaymentRequest) => void
+  onConfirm: (data: RecordPaymentRequest, proof?: File) => void
   loading: boolean
 }) {
   const [currency, setCurrency] = useState<'USD' | 'KHR'>('USD')
@@ -306,6 +432,9 @@ function RecordPaymentDialog({ invoiceNumber, owed, rate, methods, onClose, onCo
   const [riel, setRiel] = useState(owed > 0 ? String(Math.round(owed * rate)) : '') // KHR entry
   const [method, setMethod] = useState(methods[0] || 'cash')
   const [notes, setNotes] = useState('')
+  const [reference, setReference] = useState('')
+  const [proof, setProof] = useState<File | null>(null)
+  const proofRef = useRef<HTMLInputElement>(null)
   const isCash = method === 'cash'
 
   // Convert whatever was tendered to USD; record at most the balance owed.
@@ -324,7 +453,8 @@ function RecordPaymentDialog({ invoiceNumber, owed, rate, methods, onClose, onCo
       currency,
       tendered_amount: currency === 'USD' ? (parseFloat(amount) || 0) : (parseFloat(riel) || 0),
       exchange_rate: rate,
-    })
+      reference: reference.trim() || undefined,
+    }, proof || undefined)
   }
 
   return (
@@ -367,6 +497,28 @@ function RecordPaymentDialog({ invoiceNumber, owed, rate, methods, onClose, onCo
               ))}
             </Select>
           </div>
+          {method !== 'cash' && (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Trx ID (ABA) — optional</label>
+                <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. TRX-8F2K1L9Q" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Proof photo — optional</label>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => proofRef.current?.click()}>
+                    {proof ? proof.name.slice(0, 24) : 'Choose photo…'}
+                  </Button>
+                  {proof && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setProof(null); if (proofRef.current) proofRef.current.value = '' }}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={(e) => setProof(e.target.files?.[0] || null)} />
+              </div>
+            </>
+          )}
           <div className="space-y-1">
             <label className="text-xs font-medium">Notes</label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" />
@@ -377,6 +529,182 @@ function RecordPaymentDialog({ invoiceNumber, owed, rate, methods, onClose, onCo
           <Button onClick={submit} disabled={loading || recordAmount <= 0 || over || !method}>
             {loading ? 'Recording...' : 'Record Payment'}
           </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface EditorLine {
+  id?: number // present when the line already exists on the invoice
+  product?: Product
+  item_type: string
+  description: string
+  quantity: string
+  unit_price_usd: string
+}
+
+function ItemEditorDialog({ invoice, onClose, onUpdateItem, onAddItem, onRemoveItem, pending }: {
+  invoice: InvoiceDetail
+  onClose: () => void
+  onUpdateItem: (itemId: number, data: UpdateInvoiceItemRequest) => void
+  onAddItem: (data: { product_id?: number; item_type: string; description: string; quantity: number; unit_price_usd: number }) => void
+  onRemoveItem: (itemId: number) => void
+  pending: boolean
+}) {
+  const { data: productsData } = useProducts({ per_page: 100 })
+  const products = productsData?.data || []
+  const [search, setSearch] = useState('')
+  const [lines, setLines] = useState<EditorLine[]>(() =>
+    invoice.items.map((it) => ({
+      id: it.id,
+      item_type: it.item_type,
+      description: it.description,
+      quantity: String(it.quantity),
+      unit_price_usd: it.unit_price_usd.toFixed(2),
+    }))
+  )
+  const [saved, setSaved] = useState(false)
+
+  const setLine = (index: number, patch: Partial<EditorLine>) =>
+    setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)))
+
+  const addManualLine = () =>
+    setLines((ls) => [...ls, { item_type: 'labor', description: '', quantity: '1', unit_price_usd: '' }])
+
+  const pickProduct = (p: Product) => {
+    const existing = lines.find((l) => l.product?.id === p.id)
+    if (existing) return // dedupe; staff can bump qty on the existing line
+    setLines((ls) => [...ls, {
+      product: p,
+      item_type: 'product',
+      description: p.name,
+      quantity: '1',
+      unit_price_usd: String(p.sell_price || ''),
+    }])
+    setSearch('')
+  }
+
+  const save = () => {
+    let ok = true
+    lines.forEach((l) => {
+      const qty = parseFloat(l.quantity)
+      const price = parseFloat(l.unit_price_usd)
+      if (isNaN(qty) || qty <= 0 || isNaN(price) || price < 0 || !l.description.trim()) {
+        ok = false
+        return
+      }
+    })
+    if (!ok) return toast.error('Every line needs a description, quantity, and price')
+    setSaved(true)
+    lines.forEach((l) => {
+      if (l.id != null) {
+        const patch: UpdateInvoiceItemRequest = {}
+        if (l.description.trim() !== (invoice.items.find((it) => it.id === l.id)?.description ?? '')) patch.description = l.description.trim()
+        if (parseFloat(l.quantity) !== invoice.items.find((it) => it.id === l.id)?.quantity) patch.quantity = parseFloat(l.quantity)
+        if (parseFloat(l.unit_price_usd) !== invoice.items.find((it) => it.id === l.id)?.unit_price_usd) patch.unit_price_usd = parseFloat(l.unit_price_usd)
+        if (Object.keys(patch).length > 0) onUpdateItem(l.id, patch)
+      } else {
+        onAddItem({
+          product_id: l.product?.id,
+          item_type: l.item_type,
+          description: l.description.trim(),
+          quantity: parseFloat(l.quantity),
+          unit_price_usd: parseFloat(l.unit_price_usd),
+        })
+      }
+    })
+    const removed = invoice.items.filter((it) => !lines.some((l) => l.id === it.id))
+    removed.forEach((it) => onRemoveItem(it.id))
+  }
+
+  const filtered = search.trim()
+    ? products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()))
+    : products
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-lg bg-card shadow-xl sm:rounded-lg">
+        <div className="flex items-center justify-between border-b p-3">
+          <p className="text-sm font-semibold">Edit items — {invoice.invoice_number}</p>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+
+        {!saved && (
+          <div className="border-b p-3">
+            <div className="flex gap-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Add from stock: search product or SKU…"
+                className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <Button size="sm" variant="outline" onClick={addManualLine} className="shrink-0">+ Labor line</Button>
+            </div>
+            {search.trim() && (
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-md border">
+                {filtered.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">No products match</p>
+                ) : (
+                  filtered.slice(0, 12).map((p) => (
+                    <button key={p.id} onClick={() => pickProduct(p)}
+                      className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-muted">
+                      <span className="min-w-0 truncate">{p.name}</span>
+                      <span className="ml-2 shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {p.stock_quantity} left · ${p.sell_price.toFixed(2)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {lines.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No lines — add a product or a labor line.</p>
+          ) : (
+            <div className="space-y-2">
+              {lines.map((l, i) => (
+                <div key={l.id ?? `new-${i}`} className="rounded-md border p-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={l.description}
+                      onChange={(e) => setLine(i, { description: e.target.value })}
+                      placeholder="Description"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button onClick={() => setLines((ls) => ls.filter((_, x) => x !== i))}
+                      className="shrink-0 text-muted-foreground hover:text-destructive" aria-label="Remove line">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <label className="shrink-0 text-xs text-muted-foreground">Qty</label>
+                    <input
+                      value={l.quantity}
+                      onChange={(e) => setLine(i, { quantity: e.target.value })}
+                      type="number" min="0" step="any"
+                      className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <label className="ml-2 shrink-0 text-xs text-muted-foreground">Price $</label>
+                    <input
+                      value={l.unit_price_usd}
+                      onChange={(e) => setLine(i, { unit_price_usd: e.target.value })}
+                      type="number" min="0" step="0.01"
+                      className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t p-3">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={pending} onClick={save}>{pending ? 'Saving…' : 'Save changes'}</Button>
         </div>
       </div>
     </div>

@@ -85,6 +85,9 @@ export interface UpdateInvoiceRequest {
   payment_method?: string
   payment_notes?: string
   notes?: string
+  vehicle_id?: number
+  mileage?: number
+  clear_vehicle?: boolean
 }
 
 export interface Payment {
@@ -96,6 +99,8 @@ export interface Payment {
   tendered_amount?: number
   received_by_name?: string
   notes?: string
+  reference?: string
+  proof_url?: string
   created_at: string
 }
 
@@ -106,4 +111,11 @@ export interface RecordPaymentRequest {
   currency?: string
   tendered_amount?: number
   exchange_rate?: number
+  reference?: string
+}
+
+export interface UpdateInvoiceItemRequest {
+  description?: string
+  quantity?: number
+  unit_price_usd?: number
 }

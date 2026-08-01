@@ -31,6 +31,7 @@ func (s *Service) GetSettings(ctx context.Context, branchID int64) (*dto.Setting
 		LowStockThreshold:  5,
 		ExchangeRateUSDKHR: 4050,
 		ShopName:           "K&S Wheel-Tyre",
+		DistanceUnit:       "km",
 	}
 
 	for rows.Next() {
@@ -76,6 +77,10 @@ func (s *Service) GetSettings(ctx context.Context, branchID int64) (*dto.Setting
 			settings.ShopEmail = value
 		case "feature_batch_scan":
 			settings.FeatureBatchScan = value == "true"
+		case "distance_unit":
+			if value == "mi" || value == "km" {
+				settings.DistanceUnit = value
+			}
 		}
 	}
 

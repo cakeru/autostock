@@ -242,6 +242,7 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		    is_oil_product = COALESCE($20, is_oil_product),
 		    rated_life_km = COALESCE($21, rated_life_km),
 		    is_bulk      = COALESCE($22, is_bulk),
+		    type         = COALESCE($23, type),
 		    updated_at   = NOW()
 		WHERE id = $17 AND branch_id = $18 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
@@ -253,7 +254,7 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		req.MinStockAlert, req.Unit,
 		req.TireSize, req.TireBrand, req.TireModel, req.TirePattern,
 		req.DOTCode, req.LoadIndex, req.SpeedRating, req.TireType, req.Location,
-		id, branchID, req.Barcode, req.IsOilProduct, req.RatedLifeKm, req.IsBulk,
+		id, branchID, req.Barcode, req.IsOilProduct, req.RatedLifeKm, req.IsBulk, req.Type,
 	).Scan(
 		&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 		&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,

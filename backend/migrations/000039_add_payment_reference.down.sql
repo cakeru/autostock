@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE payments
+  DROP COLUMN IF EXISTS reference,
+  DROP COLUMN IF EXISTS proof_url;
+
+COMMIT;

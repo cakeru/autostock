@@ -14,6 +14,7 @@ export interface Settings {
   shop_address?: string
   shop_phone?: string
   shop_email?: string
+  distance_unit?: string
   feature_batch_scan?: boolean
 }
 

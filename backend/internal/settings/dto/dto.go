@@ -14,6 +14,7 @@ type SettingsResponse struct {
 	ShopAddress        string  `json:"shop_address,omitempty"`
 	ShopPhone          string  `json:"shop_phone,omitempty"`
 	ShopEmail          string  `json:"shop_email,omitempty"`
+	DistanceUnit       string  `json:"distance_unit"` // "km" | "mi" — label used for odometer/intervals everywhere
 	FeatureBatchScan   bool    `json:"feature_batch_scan"` // opt-in batch-QR scan-to-install feature
 }
 
