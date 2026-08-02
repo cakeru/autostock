@@ -9,6 +9,7 @@ import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useR
 import { useDebounce } from '@/hooks/useDebounce'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import { useSettings } from '@/hooks/useSettings'
+import { downloadFile } from '@/utils/download'
 import { distanceUnit, unitLabel } from '@/utils/units'
 import { StockBadge } from '@/components/inventory/StockBadge'
 import { ProductForm, type ProductFormProps } from '@/components/inventory/ProductForm'
@@ -134,6 +135,9 @@ export function Inventory() {
         title="Inventory"
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => downloadFile('/exports/products', 'products.csv')} size="sm">
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+            </Button>
             <Button variant="outline" onClick={() => setShowImport(true)} size="sm">
               <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
             </Button>

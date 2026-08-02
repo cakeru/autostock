@@ -44,8 +44,12 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      # Folder holding the nightly database backups (the host folder is chosen
+      # by the bind-mount below); served by the Settings "Download backup" button.
+      BACKUP_DIR: /backups
     volumes:
       - uploads_data:/app/uploads
+      - ${BACKUP_DIR:-./backups}:/backups:ro
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -64,8 +68,10 @@ services:
     depends_on:
       - backend
 
-  # Nightly pg_dump of the whole database into the backups volume (kept 14 days).
-  # Restore with: gunzip -c backups/autostock-<stamp>.sql.gz | docker compose exec -T postgres psql -U autostock autostock
+  # Nightly pg_dump of the whole database into the host folder (kept 14 days).
+  # Point BACKUP_DIR at a different host path (e.g. /srv/autostock/backups) on
+  # the server. Restore with:
+  #   gunzip -c backups/autostock-<stamp>.sql.gz | docker compose exec -T postgres psql -U autostock autostock
   backup:
     image: postgres:15-alpine
     container_name: autostock-backup
@@ -73,7 +79,7 @@ services:
     environment:
       DATABASE_URL: postgres://autostock:${DB_PASSWORD:-autostock123}@postgres:5432/autostock
     volumes:
-      - backups_data:/backups
+      - ${BACKUP_DIR:-./backups}:/backups
     depends_on:
       - postgres
     command: >
@@ -88,4 +94,3 @@ services:
 volumes:
   postgres_data:
   uploads_data:
-  backups_data:

@@ -19,6 +19,11 @@ type Config struct {
 	TelegramToken   string
 	TelegramChatID  string
 
+	// BackupDir is the host folder the nightly database dumps land in (mounted
+	// read-only into the backend at /backups); the Settings page streams the
+	// latest one for download.
+	BackupDir string
+
 	Storage StorageConfig
 }
 
@@ -52,6 +57,7 @@ func Load() *Config {
 		JWTExpiry:       time.Duration(getEnvInt("JWT_EXPIRY_HOURS", 24)) * time.Hour,
 		LogLevel:        getEnv("LOG_LEVEL", "debug"),
 		AppEnv:          getEnv("APP_ENV", "development"),
+		BackupDir:       getEnv("BACKUP_DIR", "./backups"),
 		TelegramEnabled: getEnv("TELEGRAM_ENABLED", "false") == "true",
 		TelegramToken:   getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:  getEnv("TELEGRAM_CHAT_ID", ""),

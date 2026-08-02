@@ -29,6 +29,7 @@ import (
 	expenseHandler "github.com/cakeru/autostock/internal/expense/handler"
 	inventoryHandler "github.com/cakeru/autostock/internal/inventory/handler"
 	invoiceHandler "github.com/cakeru/autostock/internal/invoice/handler"
+	exportHandler "github.com/cakeru/autostock/internal/export/handler"
 	"github.com/cakeru/autostock/internal/middleware"
 	purchaseorderHandler "github.com/cakeru/autostock/internal/purchaseorder/handler"
 	returnsHandler "github.com/cakeru/autostock/internal/returns/handler"
@@ -81,6 +82,7 @@ func main() {
 	batchinstallH := batchinstallHandler.NewHandler(pool)
 	servicejobH := servicejobHandler.NewHandler(pool)
 	invoiceH := invoiceHandler.NewHandler(pool, store)
+	exportH := exportHandler.NewHandler(pool, cfg.BackupDir)
 	dashboardH := dashboardHandler.NewHandler(pool)
 	analyticsH := analyticsHandler.NewHandler(pool)
 	auditH := auditHandler.NewHandler(pool)
@@ -302,6 +304,14 @@ func main() {
 
 		v1.GET("/search", middleware.AuthMiddleware(cfg.JWTSecret, pool), searchH.Search)
 
+		exports := v1.Group("/exports")
+		exports.Use(middleware.AuthMiddleware(cfg.JWTSecret, pool))
+		{
+			exports.GET("/invoices", middleware.PermissionMiddleware("invoice:view"), exportH.ExportInvoices)
+			exports.GET("/customers", middleware.PermissionMiddleware("customer:view"), exportH.ExportCustomers)
+			exports.GET("/products", middleware.PermissionMiddleware("inventory:view"), exportH.ExportProducts)
+		}
+
 		set := v1.Group("/settings")
 		set.Use(middleware.AuthMiddleware(cfg.JWTSecret, pool))
 		{
@@ -309,6 +319,7 @@ func main() {
 			set.PUT("", middleware.PermissionMiddleware("settings:update"), settingsH.UpdateSetting)
 			set.GET("/exchange-rate", settingsH.GetExchangeRate)
 			set.PUT("/exchange-rate", middleware.PermissionMiddleware("settings:update"), settingsH.UpdateExchangeRate)
+			set.GET("/backup/latest", middleware.PermissionMiddleware("settings:view"), exportH.DownloadLatestBackup)
 		}
 
 		dash := v1.Group("/dashboard")

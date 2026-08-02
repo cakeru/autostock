@@ -1,6 +1,8 @@
 import { SlideOver } from '@/components/ui/SlideOver'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Download } from 'lucide-react'
+import { downloadFile } from '@/utils/download'
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -126,7 +128,12 @@ export function Invoices() {
       <PageHeader
         title="Invoices"
         actions={
-          <Button onClick={() => setShowForm(true)} size="sm">New Invoice</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => downloadFile('/exports/invoices', 'invoices.csv')} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button onClick={() => setShowForm(true)} size="sm">New Invoice</Button>
+          </div>
         }
       />
 

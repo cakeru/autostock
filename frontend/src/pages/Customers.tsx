@@ -2,6 +2,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Trash2, MoreVertical } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Download } from 'lucide-react'
+import { downloadFile } from '@/utils/download'
 import { formatUSD } from '@/utils/currency'
 import { formatDate } from '@/utils/date'
 import { useState } from 'react'
@@ -47,7 +49,12 @@ export function Customers() {
       <PageHeader
         title="Customers"
         actions={
-          <Button onClick={() => setShowForm(true)} size="sm">Add Customer</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => downloadFile('/exports/customers', 'customers.csv')} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button onClick={() => setShowForm(true)} size="sm">Add Customer</Button>
+          </div>
         }
       />
 
