@@ -35,7 +35,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.ProductFi
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		       buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		       buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		       COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		       COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), COALESCE(image_url,''), is_active,
 		       created_at, updated_at,
@@ -71,7 +71,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.ProductFi
 		if err := rows.Scan(
 			&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 			&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 			&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 			&p.TireType, &p.Location, &p.ImageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 			&total,
@@ -92,7 +92,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*models.Pr
 	var p models.Product
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		       buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		       buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		       COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		       COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), COALESCE(image_url,''), is_active,
 		       created_at, updated_at
@@ -101,7 +101,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*models.Pr
 		Scan(
 			&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 			&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 			&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 			&p.TireType, &p.Location, &p.ImageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 		)
@@ -122,14 +122,14 @@ func (s *Service) SetImage(ctx context.Context, branchID int64, id int64, url st
 		UPDATE products SET image_url = NULLIF($1, ''), updated_at = NOW()
 		WHERE id = $2 AND branch_id = $3 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		          COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		          COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), COALESCE(image_url,''), is_active,
 		          created_at, updated_at`, url, id, branchID).
 		Scan(
 			&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 			&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+			&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 			&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 			&p.TireType, &p.Location, &p.ImageURL, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 		)
@@ -171,11 +171,11 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 		    branch_id, type, sku, name, description, category,
 		    buy_price, sell_price, stock_quantity, min_stock_alert, unit,
 		    tire_size, tire_brand, tire_model, tire_pattern, dot_code,
-		    load_index, speed_rating, tire_type, location, barcode, is_oil_product, rated_life_km, oil_interval_km, oil_interval_months, is_bulk)
+		    load_index, speed_rating, tire_type, location, barcode, is_oil_product, life_km, life_days, life_months, is_bulk)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
 		        $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		          COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		          COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), is_active,
 		          created_at, updated_at`,
@@ -183,11 +183,11 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 		req.Category, req.BuyPrice, req.SellPrice, req.StockQuantity,
 		req.MinStockAlert, unit,
 		req.TireSize, req.TireBrand, req.TireModel, req.TirePattern,
-		req.DOTCode, req.LoadIndex, req.SpeedRating, req.TireType, req.Location, req.Barcode, req.IsOilProduct, req.RatedLifeKm, req.OilIntervalKm, req.OilIntervalMonths, req.IsBulk,
+		req.DOTCode, req.LoadIndex, req.SpeedRating, req.TireType, req.Location, req.Barcode, req.IsOilProduct, req.LifeKm, req.LifeDays, req.LifeMonths, req.IsBulk,
 	).Scan(
 		&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 		&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 		&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 		&p.TireType, &p.Location, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -240,15 +240,15 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		    location     = COALESCE($16, location),
 		    barcode      = COALESCE($19, barcode),
 		    is_oil_product = COALESCE($20, is_oil_product),
-		    rated_life_km = COALESCE($21, rated_life_km),
-		    oil_interval_km = COALESCE($24, oil_interval_km),
-		    oil_interval_months = COALESCE($25, oil_interval_months),
+		    life_km = COALESCE($21, life_km),
+		    life_days = COALESCE($24, life_days),
+		    life_months = COALESCE($25, life_months),
 		    is_bulk      = COALESCE($22, is_bulk),
 		    type         = COALESCE($23, type),
 		    updated_at   = NOW()
 		WHERE id = $17 AND branch_id = $18 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		          COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		          COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), is_active,
 		          created_at, updated_at`,
@@ -256,11 +256,11 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		req.MinStockAlert, req.Unit,
 		req.TireSize, req.TireBrand, req.TireModel, req.TirePattern,
 		req.DOTCode, req.LoadIndex, req.SpeedRating, req.TireType, req.Location,
-		id, branchID, req.Barcode, req.IsOilProduct, req.RatedLifeKm, req.OilIntervalKm, req.OilIntervalMonths, req.IsBulk, req.Type,
+		id, branchID, req.Barcode, req.IsOilProduct, req.LifeKm, req.LifeDays, req.LifeMonths, req.IsBulk, req.Type,
 	).Scan(
 		&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 		&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 		&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 		&p.TireType, &p.Location, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -294,7 +294,7 @@ func (s *Service) ReceiveStock(ctx context.Context, branchID int64, id int64, us
 		    updated_at = NOW()
 		WHERE id = $3 AND branch_id = $4 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		          COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		          COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), is_active,
 		          created_at, updated_at`,
@@ -302,7 +302,7 @@ func (s *Service) ReceiveStock(ctx context.Context, branchID int64, id int64, us
 	).Scan(
 		&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 		&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 		&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 		&p.TireType, &p.Location, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -374,7 +374,7 @@ func (s *Service) AdjustStock(ctx context.Context, branchID int64, id int64, use
 		    updated_at = NOW()
 		WHERE id = $2 AND branch_id = $3 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
-		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, rated_life_km, oil_interval_km, oil_interval_months,
+		          buy_price, sell_price, stock_quantity, reserved_quantity, min_stock_alert, unit, is_oil_product, is_bulk, life_km, life_days, life_months,
 		          COALESCE(tire_size,''), COALESCE(tire_brand,''), COALESCE(tire_model,''), COALESCE(tire_pattern,''), COALESCE(dot_code,''),
 		          COALESCE(load_index,''), COALESCE(speed_rating,''), COALESCE(tire_type,''), COALESCE(location,''), is_active,
 		          created_at, updated_at`,
@@ -382,7 +382,7 @@ func (s *Service) AdjustStock(ctx context.Context, branchID int64, id int64, use
 	).Scan(
 		&p.ID, &p.BranchID, &p.Type, &p.SKU, &p.Barcode, &p.Name, &p.Description,
 		&p.Category, &p.BuyPrice, &p.SellPrice, &p.StockQuantity, &p.ReservedQuantity,
-		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.RatedLifeKm, &p.OilIntervalKm, &p.OilIntervalMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
+		&p.MinStockAlert, &p.Unit, &p.IsOilProduct, &p.IsBulk, &p.LifeKm, &p.LifeDays, &p.LifeMonths, &p.TireSize, &p.TireBrand, &p.TireModel,
 		&p.TirePattern, &p.DOTCode, &p.LoadIndex, &p.SpeedRating,
 		&p.TireType, &p.Location, &p.IsActive, &p.CreatedAt, &p.UpdatedAt,
 	)

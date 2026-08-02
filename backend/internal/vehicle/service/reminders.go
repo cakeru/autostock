@@ -361,34 +361,34 @@ func partLabel(r dto.PartRule) string {
 // lastServiceEvent returns the most recent (mileage, date) for an oil/tire
 // event plus the interval recorded at the time (life_km distance, life_months
 // time — nil when the event didn't capture one), or nils if there's no event.
-func (s *Service) lastServiceEvent(ctx context.Context, branchID, vehicleID int64, eventType string) (mileage *int, at *time.Time, lifeKm, lifeMonths *int, err error) {
+func (s *Service) lastServiceEvent(ctx context.Context, branchID, vehicleID int64, eventType string) (mileage *int, at *time.Time, lifeKm, lifeDays, lifeMonths *int, err error) {
 	err = s.pool.QueryRow(ctx,
-		`SELECT mileage, occurred_at, life_km, life_months FROM vehicle_service_events
+		`SELECT mileage, occurred_at, life_km, life_days, life_months FROM vehicle_service_events
 		 WHERE vehicle_id = $1 AND branch_id = $2 AND event_type = $3
-		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID, eventType).Scan(&mileage, &at, &lifeKm, &lifeMonths)
+		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID, eventType).Scan(&mileage, &at, &lifeKm, &lifeDays, &lifeMonths)
 	if err == pgx.ErrNoRows {
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("last %s event: %w", eventType, err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("last %s event: %w", eventType, err)
 	}
-	return mileage, at, lifeKm, lifeMonths, nil
+	return mileage, at, lifeKm, lifeDays, lifeMonths, nil
 }
 
 // lastTireEvent additionally returns the effective life (km) recorded for the
 // most recent tire install (nil when the install didn't capture one).
-func (s *Service) lastTireEvent(ctx context.Context, branchID, vehicleID int64) (mileage *int, at *time.Time, lifeKm *int, err error) {
+func (s *Service) lastTireEvent(ctx context.Context, branchID, vehicleID int64) (mileage *int, at *time.Time, lifeKm, lifeDays, lifeMonths *int, err error) {
 	err = s.pool.QueryRow(ctx,
-		`SELECT mileage, occurred_at, life_km FROM vehicle_service_events
+		`SELECT mileage, occurred_at, life_km, life_days, life_months FROM vehicle_service_events
 		 WHERE vehicle_id = $1 AND branch_id = $2 AND event_type = 'tire'
-		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID).Scan(&mileage, &at, &lifeKm)
+		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID).Scan(&mileage, &at, &lifeKm, &lifeDays, &lifeMonths)
 	if err == pgx.ErrNoRows {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("last tire event: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("last tire event: %w", err)
 	}
-	return mileage, at, lifeKm, nil
+	return mileage, at, lifeKm, lifeDays, lifeMonths, nil
 }
 
 // lastPartReplacement anchors a part reminder on the newest logged replacement
@@ -427,12 +427,13 @@ func intPtrIf(v int) *int {
 func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64, iv intervalSettings, partRules []dto.PartRule, ovr vehicleIntervalOverrides) ([]reminderInput, error) {
 	var inputs []reminderInput
 
-	oilMileage, oilAt, oilLifeKm, oilLifeMonths, err := s.lastServiceEvent(ctx, branchID, vehicleID, "oil")
+	oilMileage, oilAt, oilLifeKm, oilLifeDays, oilLifeMonths, err := s.lastServiceEvent(ctx, branchID, vehicleID, "oil")
 	if err != nil {
 		return nil, err
 	}
-	// Distance: the sold oil product's own change interval is most
-	// authoritative, then the per-vehicle override, then the branch default.
+	// The sold oil product's own rating (km / days / months) is most
+	// authoritative; missing pieces fall back to the per-vehicle override, then
+	// the branch default. A product time rating replaces the branch's default.
 	oilKm := iv.oilKm
 	if ovr.oilKm != nil {
 		oilKm = *ovr.oilKm
@@ -440,44 +441,59 @@ func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64,
 	if oilLifeKm != nil {
 		oilKm = *oilLifeKm
 	}
-	// Time: a product that specifies months replaces the branch's day default;
-	// otherwise the per-vehicle override or branch default in days applies.
 	oilDays := iv.oilDays
 	if ovr.oilDays != nil {
 		oilDays = *ovr.oilDays
 	}
+	var dayLimit *int
 	var monthsLimit *int
-	dayLimit := intPtrIf(oilDays)
-	if oilLifeMonths != nil {
+	switch {
+	case oilLifeMonths != nil:
 		monthsLimit = oilLifeMonths
-		dayLimit = nil
+		dayLimit = oilLifeDays
+	case oilLifeDays != nil:
+		dayLimit = oilLifeDays
+	default:
+		dayLimit = intPtrIf(oilDays)
 	}
 	inputs = append(inputs, reminderInput{
 		eventType: "oil", key: "oil", label: "Oil change",
 		mileage: oilMileage, at: oilAt, kmLimit: intPtrIf(oilKm), dayLimit: dayLimit, monthsLimit: monthsLimit,
 	})
 
-	tireMileage, tireAt, lifeKm, err := s.lastTireEvent(ctx, branchID, vehicleID)
+	tireMileage, tireAt, tireLifeKm, tireLifeDays, tireLifeMonths, err := s.lastTireEvent(ctx, branchID, vehicleID)
 	if err != nil {
 		return nil, err
 	}
-	// km life: the actually-installed tire's rated life is most authoritative,
+	// km life: the actually-installed tire's own rating is most authoritative,
 	// then the per-vehicle override, then the branch default.
 	life := iv.tireLifeKm
 	if ovr.tireKm != nil {
 		life = *ovr.tireKm
 	}
-	if lifeKm != nil {
-		life = *lifeKm
+	if tireLifeKm != nil {
+		life = *tireLifeKm
 	}
-	// Optional day interval for tires (off by default → km-only, as before).
+	// Time: an installed tire's day/month rating, else the branch default
+	// (off by default → km-only). A month rating replaces the day default.
 	tireDays := iv.tireDays
 	if ovr.tireDays != nil {
 		tireDays = *ovr.tireDays
 	}
+	var tireDayLimit *int
+	var tireMonthsLimit *int
+	switch {
+	case tireLifeMonths != nil:
+		tireMonthsLimit = tireLifeMonths
+		tireDayLimit = tireLifeDays
+	case tireLifeDays != nil:
+		tireDayLimit = tireLifeDays
+	default:
+		tireDayLimit = intPtrIf(tireDays)
+	}
 	inputs = append(inputs, reminderInput{
 		eventType: "tire", key: "tire", label: "Tires",
-		mileage: tireMileage, at: tireAt, kmLimit: intPtrIf(life), dayLimit: intPtrIf(tireDays),
+		mileage: tireMileage, at: tireAt, kmLimit: intPtrIf(life), dayLimit: tireDayLimit, monthsLimit: tireMonthsLimit,
 	})
 
 	for _, rule := range partRules {

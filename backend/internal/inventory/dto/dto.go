@@ -26,9 +26,9 @@ type CreateProductRequest struct {
 	Unit          string  `json:"unit"`
 	IsOilProduct  bool    `json:"is_oil_product,omitempty"`
 	IsBulk        bool    `json:"is_bulk,omitempty"`
-	RatedLifeKm   *int    `json:"rated_life_km,omitempty"`
-	OilIntervalKm *int    `json:"oil_interval_km,omitempty"`
-	OilIntervalMonths *int `json:"oil_interval_months,omitempty"`
+	LifeKm        *int    `json:"life_km,omitempty"`
+	LifeDays      *int    `json:"life_days,omitempty"`
+	LifeMonths    *int    `json:"life_months,omitempty"`
 	TireSize      string  `json:"tire_size,omitempty"`
 	TireBrand     string  `json:"tire_brand,omitempty"`
 	TireModel     string  `json:"tire_model,omitempty"`
@@ -52,9 +52,9 @@ type UpdateProductRequest struct {
 	Unit          *string  `json:"unit,omitempty"`
 	IsOilProduct  *bool    `json:"is_oil_product,omitempty"`
 	IsBulk        *bool    `json:"is_bulk,omitempty"`
-	RatedLifeKm   *int     `json:"rated_life_km,omitempty"`
-	OilIntervalKm *int     `json:"oil_interval_km,omitempty"`
-	OilIntervalMonths *int `json:"oil_interval_months,omitempty"`
+	LifeKm        *int     `json:"life_km,omitempty"`
+	LifeDays      *int     `json:"life_days,omitempty"`
+	LifeMonths    *int     `json:"life_months,omitempty"`
 	TireSize      *string  `json:"tire_size,omitempty"`
 	TireBrand     *string  `json:"tire_brand,omitempty"`
 	TireModel     *string  `json:"tire_model,omitempty"`

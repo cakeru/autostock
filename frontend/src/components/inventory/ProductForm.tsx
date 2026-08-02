@@ -38,9 +38,9 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
   const [isBulk, setIsBulk] = useState(initial?.is_bulk || false)
 
   const [tireSize, setTireSize] = useState(initial?.tire_size || '')
-  const [ratedLifeKm, setRatedLifeKm] = useState(initial?.rated_life_km?.toString() || '')
-  const [oilIntervalKm, setOilIntervalKm] = useState(initial?.oil_interval_km?.toString() || '')
-  const [oilIntervalMonths, setOilIntervalMonths] = useState(initial?.oil_interval_months?.toString() || '')
+  const [lifeKm, setLifeKm] = useState(initial?.life_km?.toString() || '')
+  const [lifeDays, setLifeDays] = useState(initial?.life_days?.toString() || '')
+  const [lifeMonths, setLifeMonths] = useState(initial?.life_months?.toString() || '')
   const [tireBrand, setTireBrand] = useState(initial?.tire_brand || '')
   const [tireModel, setTireModel] = useState(initial?.tire_model || '')
   const [tirePattern, setTirePattern] = useState(initial?.tire_pattern || '')
@@ -85,7 +85,6 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
     }
     if (type === 'tire') {
       data.tire_size = tireSize
-      data.rated_life_km = ratedLifeKm ? parseInt(ratedLifeKm) : null
       data.tire_brand = tireBrand
       data.tire_model = tireModel
       data.tire_pattern = tirePattern
@@ -93,11 +92,13 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
       data.load_index = loadIndex
       data.speed_rating = speedRating
       data.tire_type = tireType
-    } else if (isOilProduct) {
-      // An oil change is due again after the product's own interval — distance
-      // and/or months — from the sale, driving the vehicle's reminder.
-      data.oil_interval_km = oilIntervalKm ? parseInt(oilIntervalKm) : null
-      data.oil_interval_months = oilIntervalMonths ? parseInt(oilIntervalMonths) : null
+    }
+    // Service-life rating (km / days / months) — drives the vehicle's
+    // due-for-service reminder when this product is sold on an invoice.
+    if (type === 'tire' || isOilProduct) {
+      data.life_km = lifeKm ? parseInt(lifeKm) : null
+      data.life_days = lifeDays ? parseInt(lifeDays) : null
+      data.life_months = lifeMonths ? parseInt(lifeMonths) : null
     }
     const image: ProductImageIntent | undefined = pendingFile
       ? { file: pendingFile }
@@ -200,22 +201,6 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
             Engine oil product
             <span className="text-xs text-muted-foreground">— selling this logs an oil-change reminder on the customer's vehicle</span>
           </label>
-          {isOilProduct && (
-            <div className="rounded-md bg-muted/50 p-3">
-              <p className="text-xs font-semibold mb-2">Oil change interval — how soon after a sale the next change is due</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-xs">Distance ({distanceUnitLabel})</Label>
-                  <Input value={oilIntervalKm} onChange={(e) => setOilIntervalKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={distanceUnitLabel === 'mi' ? 'e.g. 3000' : 'e.g. 5000'} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Months</Label>
-                  <Input value={oilIntervalMonths} onChange={(e) => setOilIntervalMonths(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 3" />
-                  <p className="text-[11px] text-muted-foreground">Leave blank to skip the time limit</p>
-                </div>
-              </div>
-            </div>
-          )}
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -229,6 +214,29 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
             Bulk — sold by volume from a drum
             <span className="text-xs text-muted-foreground">— tracks fractional quantities and shows a drum gauge</span>
           </label>
+        </div>
+      )}
+
+      {(type === 'tire' || isOilProduct) && (
+        <div className="rounded-md bg-muted/50 p-4">
+          <p className="text-sm font-semibold mb-0.5">{type === 'tire' ? 'Tire service life' : 'Oil change interval'}</p>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            How long after this is sold the customer is due again — recorded from the invoice and drives their reminder. Leave blank to use the shop default.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Distance ({distanceUnitLabel})</Label>
+              <Input value={lifeKm} onChange={(e) => setLifeKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={distanceUnitLabel === 'mi' ? 'e.g. 3000' : 'e.g. 5000'} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Days</Label>
+              <Input value={lifeDays} onChange={(e) => setLifeDays(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 90" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Months</Label>
+              <Input value={lifeMonths} onChange={(e) => setLifeMonths(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 3" />
+            </div>
+          </div>
         </div>
       )}
 
@@ -267,11 +275,6 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
             <div className="space-y-1.5">
               <Label className="text-xs">Size</Label>
               <Input value={tireSize} onChange={(e) => setTireSize(e.target.value)} placeholder="205/55R16" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Rated life ({distanceUnitLabel})</Label>
-              <Input value={ratedLifeKm} onChange={(e) => setRatedLifeKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 60000" />
-              <p className="text-[11px] text-muted-foreground">Drives the tire-change reminder when this tire is sold.</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Brand</Label>
