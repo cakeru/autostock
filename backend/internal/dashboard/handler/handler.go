@@ -65,6 +65,9 @@ func (h *Handler) Profit(c *gin.Context) {
 func (h *Handler) DayClose(c *gin.Context) {
 	branchID, _ := c.Get("branch_id")
 	date := c.DefaultQuery("date", "")
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
 
 	summary, err := h.service.GetDayClose(c.Request.Context(), branchID.(int64), date)
 	if err != nil {

@@ -323,6 +323,7 @@ type PublicReportResponse struct {
 	Year         int    `json:"year,omitempty"`
 	BodyType     string `json:"body_type,omitempty"`
 	CustomerName string `json:"customer_name,omitempty"`
+	DistanceUnit string `json:"distance_unit"` // "km" | "mi" — how the report labels mileages
 
 	GeneratedAt   time.Time              `json:"generated_at"`
 	Due           []DueStatus            `json:"due"`

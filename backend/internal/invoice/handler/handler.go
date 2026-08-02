@@ -231,10 +231,6 @@ func (h *Handler) ListPayments(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": payments})
 }
 
-func (h *Handler) PDF(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": "PDF generation not yet implemented"})
-}
-
 func (h *Handler) AddItem(c *gin.Context) {
 	branchID, _ := c.Get("branch_id")
 	userID, _ := c.Get("user_id")

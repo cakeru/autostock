@@ -64,6 +64,28 @@ services:
     depends_on:
       - backend
 
+  # Nightly pg_dump of the whole database into the backups volume (kept 14 days).
+  # Restore with: gunzip -c backups/autostock-<stamp>.sql.gz | docker compose exec -T postgres psql -U autostock autostock
+  backup:
+    image: postgres:15-alpine
+    container_name: autostock-backup
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://autostock:${DB_PASSWORD:-autostock123}@postgres:5432/autostock
+    volumes:
+      - backups_data:/backups
+    depends_on:
+      - postgres
+    command: >
+      /bin/sh -c 'while true; do
+        FILENAME="/backups/autostock-$(date +%Y%m%d-%H%M%S).sql.gz";
+        pg_dump "$$DATABASE_URL" | gzip > "$$FILENAME" &&
+        echo "Backup written: $$FILENAME";
+        find /backups -name "autostock-*.sql.gz" -mtime +14 -delete;
+        sleep 86400;
+      done'
+
 volumes:
   postgres_data:
   uploads_data:
+  backups_data:

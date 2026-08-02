@@ -70,7 +70,7 @@ func (s *Service) GetPublicReport(ctx context.Context, token string) (*dto.Publi
 
 	var vehicleID, branchID, customerID int64
 	var year *int
-	r := &dto.PublicReportResponse{GeneratedAt: time.Now()}
+	r := &dto.PublicReportResponse{GeneratedAt: time.Now(), DistanceUnit: "km"}
 	err := s.pool.QueryRow(ctx, `
 		SELECT vh.id, vh.branch_id, vh.customer_id, vh.plate_number,
 		       COALESCE(vh.make,''), COALESCE(vh.model,''), vh.year, COALESCE(vh.body_type,''),
@@ -90,7 +90,7 @@ func (s *Service) GetPublicReport(ctx context.Context, token string) (*dto.Publi
 	}
 
 	shopRows, err := s.pool.Query(ctx,
-		`SELECT key, value FROM settings WHERE branch_id = $1 AND key IN ('shop_name', 'shop_phone', 'shop_address')`,
+		`SELECT key, value FROM settings WHERE branch_id = $1 AND key IN ('shop_name', 'shop_phone', 'shop_address', 'distance_unit')`,
 		branchID)
 	if err == nil {
 		for shopRows.Next() {
@@ -103,6 +103,10 @@ func (s *Service) GetPublicReport(ctx context.Context, token string) (*dto.Publi
 					r.ShopPhone = v
 				case "shop_address":
 					r.ShopAddress = v
+				case "distance_unit":
+					if v == "mi" || v == "km" {
+						r.DistanceUnit = v
+					}
 				}
 			}
 		}

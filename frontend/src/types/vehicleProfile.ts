@@ -52,6 +52,7 @@ export interface PublicReport {
   year?: number
   body_type?: string
   customer_name?: string
+  distance_unit?: string
   generated_at: string
   due: DueStatus[]
   wheel_services: WheelService[]

@@ -100,11 +100,3 @@ export function useRemoveInvoiceItem() {
     },
   })
 }
-
-export function useInvoicePDF(id: number) {
-  return useQuery({
-    queryKey: ['invoice-pdf', id],
-    queryFn: () => invoicesApi.get(id),
-    enabled: false,
-  })
-}

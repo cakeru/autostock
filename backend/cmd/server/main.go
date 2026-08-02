@@ -292,7 +292,6 @@ func main() {
 			invc.POST("/:id/items", middleware.PermissionMiddleware("invoice:update"), invoiceH.AddItem)
 			invc.PUT("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.UpdateItem)
 			invc.DELETE("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.RemoveItem)
-			invc.GET("/:id/pdf", middleware.PermissionMiddleware("invoice:view"), invoiceH.PDF)
 			invc.POST("/:id/payments", middleware.PermissionMiddleware("invoice:update"), invoiceH.RecordPayment)
 			invc.POST("/:id/payments/:payment_id/proof", middleware.PermissionMiddleware("invoice:update"), invoiceH.UploadPaymentProof)
 			invc.GET("/:id/payments", middleware.PermissionMiddleware("invoice:view"), invoiceH.ListPayments)

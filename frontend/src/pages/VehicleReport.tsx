@@ -179,7 +179,7 @@ export function VehicleReport() {
         <div className="mt-7 border-t pt-5">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Service history</p>
           <ol className="relative space-y-6 border-l border-border pl-6">
-            {report.visits.map((v, i) => <PublicVisit key={`${v.date}-${i}`} visit={v} bodyType={report.body_type} />)}
+            {report.visits.map((v, i) => <PublicVisit key={`${v.date}-${i}`} visit={v} bodyType={report.body_type} unit={report.distance_unit === 'mi' ? 'mi' : 'km'} />)}
           </ol>
         </div>
       )}
@@ -200,13 +200,13 @@ export function VehicleReport() {
 // One visit on the customer-facing history timeline: the work done that day,
 // plus any photos the shop chose to share. No prices or internal notes — the
 // backend already stripped those from report.visits.
-function PublicVisit({ visit: v, bodyType }: { visit: Visit; bodyType?: string }) {
+function PublicVisit({ visit: v, bodyType, unit }: { visit: Visit; bodyType?: string; unit: string }) {
   return (
     <li className="relative break-inside-avoid">
       <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 bg-white" style={{ borderColor: 'var(--color-primary)' }} />
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">{formatDate(v.date)}</p>
-        {v.mileage != null && <p className="text-xs tabular-nums text-muted-foreground">{v.mileage.toLocaleString()} km</p>}
+        {v.mileage != null && <p className="text-xs tabular-nums text-muted-foreground">{v.mileage.toLocaleString()} {unit}</p>}
       </div>
       <div className="mt-2">
         <VisitLines visit={v} bodyType={bodyType} showNotes={false} />
