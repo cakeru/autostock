@@ -1,6 +1,7 @@
 export interface Customer {
   id: number
   name: string
+  customer_type: 'garage' | 'retail' | 'company'
   phone?: string
   email?: string
   address?: string
@@ -59,6 +60,7 @@ export interface CustomerListParams {
 
 export interface CreateCustomerRequest {
   name: string
+  customer_type?: string
   phone?: string
   email?: string
   address?: string
@@ -67,6 +69,7 @@ export interface CreateCustomerRequest {
 
 export interface UpdateCustomerRequest {
   name?: string
+  customer_type?: string
   phone?: string
   email?: string
   address?: string

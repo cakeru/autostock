@@ -13,6 +13,9 @@ import { TableCard, TableFooter, Th, ActionsTh } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
+const customerTypeLabel = (t?: string) =>
+  t === 'garage' ? 'Garage' : t === 'company' ? 'Company' : 'Retail'
+
 export function Customers() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
@@ -87,7 +90,9 @@ export function Customers() {
                       <tr key={c.id} className="group border-b last:border-0 hover:bg-muted/50 transition-colors duration-100 cursor-pointer"
                         onClick={() => navigate(`/customers/${c.id}`)}>
                         <td className="px-4 py-2.5">
-                          <p className="font-medium">{c.name}</p>
+                          <p className="font-medium">{c.name}{' '}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{customerTypeLabel(c.customer_type)}</span>
+                          </p>
                           {c.vehicle_plates && <p className="text-xs text-muted-foreground">{c.vehicle_plates}</p>}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground">{c.phone || '—'}</td>
@@ -124,7 +129,9 @@ export function Customers() {
                   onClick={() => navigate(`/customers/${c.id}`)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{c.name}</p>
+                      <p className="font-medium text-sm truncate">{c.name}{' '}
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{customerTypeLabel(c.customer_type)}</span>
+                      </p>
                       {c.phone && <p className="text-xs text-muted-foreground mt-0.5">{c.phone}</p>}
                       {c.vehicle_plates && <p className="text-xs text-muted-foreground mt-0.5 truncate">{c.vehicle_plates}</p>}
                     </div>

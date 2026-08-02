@@ -279,13 +279,14 @@ func estimateTodayMileage(first, last *mileagePoint, fallbackKmPerDay float64, n
 // limit may be nil; whichever is reached first (projected onto today via the
 // vehicle's mileage velocity) wins.
 type reminderInput struct {
-	eventType string // oil | tire | part
-	key       string // oil | tire | <part_key>
-	label     string
-	mileage   *int
-	at        *time.Time
-	kmLimit   *int
-	dayLimit  *int
+	eventType   string // oil | tire | part
+	key         string // oil | tire | <part_key>
+	label       string
+	mileage     *int
+	at          *time.Time
+	kmLimit     *int
+	dayLimit    *int
+	monthsLimit *int // oil only: calendar-month interval from the sold product
 }
 
 func computeDue(in reminderInput, first, last *mileagePoint, fallbackKmPerDay float64, dueSoonDays int, now time.Time) dto.DueStatus {
@@ -298,6 +299,12 @@ func computeDue(in reminderInput, first, last *mileagePoint, fallbackKmPerDay fl
 	if in.at != nil && in.dayLimit != nil {
 		d := in.at.AddDate(0, 0, *in.dayLimit)
 		dateDue = &d
+	}
+	if in.at != nil && in.monthsLimit != nil {
+		d := in.at.AddDate(0, *in.monthsLimit, 0)
+		if dateDue == nil || d.Before(*dateDue) {
+			dateDue = &d
+		}
 	}
 	if in.mileage != nil && in.kmLimit != nil {
 		est := estimateTodayMileage(first, last, fallbackKmPerDay, now)
@@ -352,18 +359,20 @@ func partLabel(r dto.PartRule) string {
 }
 
 // lastServiceEvent returns the most recent (mileage, date) for an oil/tire
-// event, or nils if there's none logged yet.
-func (s *Service) lastServiceEvent(ctx context.Context, branchID, vehicleID int64, eventType string) (*int, *time.Time, error) {
-	var mileage *int
-	var at *time.Time
-	err := s.pool.QueryRow(ctx,
-		`SELECT mileage, occurred_at FROM vehicle_service_events
+// event plus the interval recorded at the time (life_km distance, life_months
+// time — nil when the event didn't capture one), or nils if there's no event.
+func (s *Service) lastServiceEvent(ctx context.Context, branchID, vehicleID int64, eventType string) (mileage *int, at *time.Time, lifeKm, lifeMonths *int, err error) {
+	err = s.pool.QueryRow(ctx,
+		`SELECT mileage, occurred_at, life_km, life_months FROM vehicle_service_events
 		 WHERE vehicle_id = $1 AND branch_id = $2 AND event_type = $3
-		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID, eventType).Scan(&mileage, &at)
-	if err != nil && err != pgx.ErrNoRows {
-		return nil, nil, fmt.Errorf("last %s event: %w", eventType, err)
+		 ORDER BY occurred_at DESC LIMIT 1`, vehicleID, branchID, eventType).Scan(&mileage, &at, &lifeKm, &lifeMonths)
+	if err == pgx.ErrNoRows {
+		return nil, nil, nil, nil, nil
 	}
-	return mileage, at, nil
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("last %s event: %w", eventType, err)
+	}
+	return mileage, at, lifeKm, lifeMonths, nil
 }
 
 // lastTireEvent additionally returns the effective life (km) recorded for the
@@ -418,21 +427,34 @@ func intPtrIf(v int) *int {
 func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64, iv intervalSettings, partRules []dto.PartRule, ovr vehicleIntervalOverrides) ([]reminderInput, error) {
 	var inputs []reminderInput
 
-	oilMileage, oilAt, err := s.lastServiceEvent(ctx, branchID, vehicleID, "oil")
+	oilMileage, oilAt, oilLifeKm, oilLifeMonths, err := s.lastServiceEvent(ctx, branchID, vehicleID, "oil")
 	if err != nil {
 		return nil, err
 	}
+	// Distance: the sold oil product's own change interval is most
+	// authoritative, then the per-vehicle override, then the branch default.
 	oilKm := iv.oilKm
 	if ovr.oilKm != nil {
 		oilKm = *ovr.oilKm
 	}
+	if oilLifeKm != nil {
+		oilKm = *oilLifeKm
+	}
+	// Time: a product that specifies months replaces the branch's day default;
+	// otherwise the per-vehicle override or branch default in days applies.
 	oilDays := iv.oilDays
 	if ovr.oilDays != nil {
 		oilDays = *ovr.oilDays
 	}
+	var monthsLimit *int
+	dayLimit := intPtrIf(oilDays)
+	if oilLifeMonths != nil {
+		monthsLimit = oilLifeMonths
+		dayLimit = nil
+	}
 	inputs = append(inputs, reminderInput{
 		eventType: "oil", key: "oil", label: "Oil change",
-		mileage: oilMileage, at: oilAt, kmLimit: intPtrIf(oilKm), dayLimit: intPtrIf(oilDays),
+		mileage: oilMileage, at: oilAt, kmLimit: intPtrIf(oilKm), dayLimit: dayLimit, monthsLimit: monthsLimit,
 	})
 
 	tireMileage, tireAt, lifeKm, err := s.lastTireEvent(ctx, branchID, vehicleID)

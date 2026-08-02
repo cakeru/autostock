@@ -45,7 +45,9 @@ export function CustomerDetail() {
   return (
     <div className="max-w-4xl space-y-6">
       <PageHeader
-        title={customer.name}
+        title={<>{customer.name}{' '}<span className="rounded bg-muted px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {customer.customer_type === 'garage' ? 'Garage' : customer.customer_type === 'company' ? 'Company' : 'Retail'}
+        </span></>}
         backTo={-1}
         breadcrumb="Customers"
         actions={

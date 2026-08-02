@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE customers DROP COLUMN IF EXISTS customer_type;
+
+COMMIT;

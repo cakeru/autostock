@@ -16,6 +16,8 @@ export interface Product {
   is_oil_product?: boolean
   is_bulk?: boolean
   rated_life_km?: number | null
+  oil_interval_km?: number | null
+  oil_interval_months?: number | null
   tire_size?: string
   tire_brand?: string
   tire_model?: string
@@ -111,6 +113,8 @@ export interface CreateProductRequest {
   is_oil_product?: boolean
   is_bulk?: boolean
   rated_life_km?: number | null
+  oil_interval_km?: number | null
+  oil_interval_months?: number | null
   tire_size?: string
   tire_brand?: string
   tire_model?: string
@@ -135,6 +139,8 @@ export interface UpdateProductRequest {
 	is_oil_product?: boolean
 	is_bulk?: boolean
 	rated_life_km?: number | null
+	oil_interval_km?: number | null
+	oil_interval_months?: number | null
 	tire_size?: string
 	tire_brand?: string
 	tire_model?: string

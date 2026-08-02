@@ -15,24 +15,27 @@ type CustomerFilter struct {
 }
 
 type CreateCustomerRequest struct {
-	Name    string `json:"name" binding:"required"`
-	Phone   string `json:"phone,omitempty"`
-	Email   string `json:"email,omitempty"`
-	Address string `json:"address,omitempty"`
-	Notes   string `json:"notes,omitempty"`
+	Name         string `json:"name" binding:"required"`
+	CustomerType string `json:"customer_type,omitempty" binding:"omitempty,oneof=garage retail company"`
+	Phone        string `json:"phone,omitempty"`
+	Email        string `json:"email,omitempty"`
+	Address      string `json:"address,omitempty"`
+	Notes        string `json:"notes,omitempty"`
 }
 
 type UpdateCustomerRequest struct {
-	Name    *string `json:"name,omitempty"`
-	Phone   *string `json:"phone,omitempty"`
-	Email   *string `json:"email,omitempty"`
-	Address *string `json:"address,omitempty"`
-	Notes   *string `json:"notes,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	CustomerType *string `json:"customer_type,omitempty" binding:"omitempty,oneof=garage retail company"`
+	Phone        *string `json:"phone,omitempty"`
+	Email        *string `json:"email,omitempty"`
+	Address      *string `json:"address,omitempty"`
+	Notes        *string `json:"notes,omitempty"`
 }
 
 type CustomerResponse struct {
 	ID            int64     `json:"id"`
 	Name          string    `json:"name"`
+	CustomerType  string    `json:"customer_type"`
 	Phone         string    `json:"phone,omitempty"`
 	Email         string    `json:"email,omitempty"`
 	Address       string    `json:"address,omitempty"`

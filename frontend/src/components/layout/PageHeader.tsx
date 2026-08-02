@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 
 interface PageHeaderProps {
-  title: string
+  title: ReactNode
   backTo?: string | number
   breadcrumb?: string
   badges?: ReactNode

@@ -31,7 +31,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.CustomerF
 	offset := (filter.Page - 1) * filter.PerPage
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.id, c.name, COALESCE(c.phone,''), COALESCE(c.email,''), COALESCE(c.address,''), COALESCE(c.notes,''),
+		SELECT c.id, c.name, c.customer_type, COALESCE(c.phone,''), COALESCE(c.email,''), COALESCE(c.address,''), COALESCE(c.notes,''),
 		       c.customer_since, c.is_active, c.created_at, c.updated_at,
 		       (SELECT COUNT(*) FROM vehicles v WHERE v.customer_id = c.id) as vehicle_count,
 		       COALESCE((SELECT string_agg(v.plate_number, ', ' ORDER BY v.created_at) FROM vehicles v WHERE v.customer_id = c.id), '') as plates,
@@ -63,7 +63,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.CustomerF
 	for rows.Next() {
 		var c dto.CustomerResponse
 		var customerSince, lastVisit *time.Time
-		if err := rows.Scan(&c.ID, &c.Name, &c.Phone, &c.Email,
+		if err := rows.Scan(&c.ID, &c.Name, &c.CustomerType, &c.Phone, &c.Email,
 			&c.Address, &c.Notes, &customerSince, &c.IsActive,
 			&c.CreatedAt, &c.UpdatedAt, &c.VehicleCount, &c.VehiclePlates, &c.TotalSpent, &lastVisit); err != nil {
 			return nil, 0, fmt.Errorf("scan customer: %w", err)
@@ -107,10 +107,10 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Custo
 	var c dto.CustomerResponse
 	var customerSince *time.Time
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, name, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''),
+		SELECT id, name, customer_type, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''),
 		       customer_since, is_active, created_at, updated_at
 		FROM customers WHERE id = $1 AND branch_id = $2 AND is_active = true`, id, branchID).
-		Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address,
+		Scan(&c.ID, &c.Name, &c.CustomerType, &c.Phone, &c.Email, &c.Address,
 			&c.Notes, &customerSince, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -135,11 +135,11 @@ func (s *Service) Create(ctx context.Context, branchID int64, req *dto.CreateCus
 	var c dto.CustomerResponse
 	var customerSince *time.Time
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO customers (branch_id, name, phone, email, address, notes, customer_since)
-		VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)
-		RETURNING id, name, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''), customer_since, is_active, created_at, updated_at`,
-		branchID, req.Name, req.Phone, req.Email, req.Address, req.Notes).
-		Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address,
+		INSERT INTO customers (branch_id, name, customer_type, phone, email, address, notes, customer_since)
+		VALUES ($1, $2, COALESCE(NULLIF($3, ''), 'retail'), $4, $5, $6, $7, CURRENT_DATE)
+		RETURNING id, name, customer_type, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''), customer_since, is_active, created_at, updated_at`,
+		branchID, req.Name, req.CustomerType, req.Phone, req.Email, req.Address, req.Notes).
+		Scan(&c.ID, &c.Name, &c.CustomerType, &c.Phone, &c.Email, &c.Address,
 			&c.Notes, &customerSince, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create customer: %w", err)
@@ -156,15 +156,16 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 	err := s.pool.QueryRow(ctx, `
 		UPDATE customers
 		SET name = COALESCE(NULLIF($1, ''), name),
-		    phone = COALESCE($2, phone),
-		    email = COALESCE($3, email),
-		    address = COALESCE($4, address),
-		    notes = COALESCE($5, notes),
+		    customer_type = COALESCE(NULLIF($2, ''), customer_type),
+		    phone = COALESCE($3, phone),
+		    email = COALESCE($4, email),
+		    address = COALESCE($5, address),
+		    notes = COALESCE($6, notes),
 		    updated_at = NOW()
-		WHERE id = $6 AND branch_id = $7 AND is_active = true
-		RETURNING id, name, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''), customer_since, is_active, created_at, updated_at`,
-		req.Name, req.Phone, req.Email, req.Address, req.Notes, id, branchID).
-		Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address,
+		WHERE id = $7 AND branch_id = $8 AND is_active = true
+		RETURNING id, name, customer_type, COALESCE(phone,''), COALESCE(email,''), COALESCE(address,''), COALESCE(notes,''), customer_since, is_active, created_at, updated_at`,
+		req.Name, req.CustomerType, req.Phone, req.Email, req.Address, req.Notes, id, branchID).
+		Scan(&c.ID, &c.Name, &c.CustomerType, &c.Phone, &c.Email, &c.Address,
 			&c.Notes, &customerSince, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {

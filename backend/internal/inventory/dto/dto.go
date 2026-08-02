@@ -27,6 +27,8 @@ type CreateProductRequest struct {
 	IsOilProduct  bool    `json:"is_oil_product,omitempty"`
 	IsBulk        bool    `json:"is_bulk,omitempty"`
 	RatedLifeKm   *int    `json:"rated_life_km,omitempty"`
+	OilIntervalKm *int    `json:"oil_interval_km,omitempty"`
+	OilIntervalMonths *int `json:"oil_interval_months,omitempty"`
 	TireSize      string  `json:"tire_size,omitempty"`
 	TireBrand     string  `json:"tire_brand,omitempty"`
 	TireModel     string  `json:"tire_model,omitempty"`
@@ -51,6 +53,8 @@ type UpdateProductRequest struct {
 	IsOilProduct  *bool    `json:"is_oil_product,omitempty"`
 	IsBulk        *bool    `json:"is_bulk,omitempty"`
 	RatedLifeKm   *int     `json:"rated_life_km,omitempty"`
+	OilIntervalKm *int     `json:"oil_interval_km,omitempty"`
+	OilIntervalMonths *int `json:"oil_interval_months,omitempty"`
 	TireSize      *string  `json:"tire_size,omitempty"`
 	TireBrand     *string  `json:"tire_brand,omitempty"`
 	TireModel     *string  `json:"tire_model,omitempty"`

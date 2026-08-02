@@ -39,6 +39,8 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
 
   const [tireSize, setTireSize] = useState(initial?.tire_size || '')
   const [ratedLifeKm, setRatedLifeKm] = useState(initial?.rated_life_km?.toString() || '')
+  const [oilIntervalKm, setOilIntervalKm] = useState(initial?.oil_interval_km?.toString() || '')
+  const [oilIntervalMonths, setOilIntervalMonths] = useState(initial?.oil_interval_months?.toString() || '')
   const [tireBrand, setTireBrand] = useState(initial?.tire_brand || '')
   const [tireModel, setTireModel] = useState(initial?.tire_model || '')
   const [tirePattern, setTirePattern] = useState(initial?.tire_pattern || '')
@@ -91,6 +93,11 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
       data.load_index = loadIndex
       data.speed_rating = speedRating
       data.tire_type = tireType
+    } else if (isOilProduct) {
+      // An oil change is due again after the product's own interval — distance
+      // and/or months — from the sale, driving the vehicle's reminder.
+      data.oil_interval_km = oilIntervalKm ? parseInt(oilIntervalKm) : null
+      data.oil_interval_months = oilIntervalMonths ? parseInt(oilIntervalMonths) : null
     }
     const image: ProductImageIntent | undefined = pendingFile
       ? { file: pendingFile }
@@ -193,6 +200,22 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
             Engine oil product
             <span className="text-xs text-muted-foreground">— selling this logs an oil-change reminder on the customer's vehicle</span>
           </label>
+          {isOilProduct && (
+            <div className="rounded-md bg-muted/50 p-3">
+              <p className="text-xs font-semibold mb-2">Oil change interval — how soon after a sale the next change is due</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">Distance ({distanceUnitLabel})</Label>
+                  <Input value={oilIntervalKm} onChange={(e) => setOilIntervalKm(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={distanceUnitLabel === 'mi' ? 'e.g. 3000' : 'e.g. 5000'} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Months</Label>
+                  <Input value={oilIntervalMonths} onChange={(e) => setOilIntervalMonths(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder="e.g. 3" />
+                  <p className="text-[11px] text-muted-foreground">Leave blank to skip the time limit</p>
+                </div>
+              </div>
+            </div>
+          )}
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"

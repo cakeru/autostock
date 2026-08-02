@@ -208,10 +208,12 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 	// product's low-stock threshold so the deduction loop below can flag a
 	// crossing without a second round trip.
 	type stockInfo struct {
-		sku, name, productType string
-		isOil                  bool
-		ratedLifeKm            *int
-		oldQty, minAlert       float64
+		sku, name, productType  string
+		isOil                   bool
+		ratedLifeKm             *int
+		oilIntervalKm           *int
+		oilIntervalMonths       *int
+		oldQty, minAlert        float64
 	}
 	stockByProduct := map[int64]stockInfo{}
 	for _, item := range req.Items {
@@ -220,9 +222,10 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 			var sku, name, productType string
 			var isOil bool
 			var ratedLifeKm *int
+			var oilIntervalKm, oilIntervalMonths *int
 			err := tx.QueryRow(ctx,
-				`SELECT stock_quantity, reserved_quantity, min_stock_alert, sku, name, type, is_oil_product, rated_life_km FROM products WHERE id = $1 AND branch_id = $2 AND is_active = true FOR UPDATE`,
-				*item.ProductID, branchID).Scan(&stockQty, &reservedQty, &minAlert, &sku, &name, &productType, &isOil, &ratedLifeKm)
+				`SELECT stock_quantity, reserved_quantity, min_stock_alert, sku, name, type, is_oil_product, rated_life_km, oil_interval_km, oil_interval_months FROM products WHERE id = $1 AND branch_id = $2 AND is_active = true FOR UPDATE`,
+				*item.ProductID, branchID).Scan(&stockQty, &reservedQty, &minAlert, &sku, &name, &productType, &isOil, &ratedLifeKm, &oilIntervalKm, &oilIntervalMonths)
 			if err != nil {
 				return nil, fmt.Errorf("check stock for product %d: %w", *item.ProductID, err)
 			}
@@ -234,7 +237,7 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 					Status:  400,
 				}
 			}
-			stockByProduct[*item.ProductID] = stockInfo{sku: sku, name: name, productType: productType, isOil: isOil, ratedLifeKm: ratedLifeKm, oldQty: stockQty, minAlert: minAlert}
+			stockByProduct[*item.ProductID] = stockInfo{sku: sku, name: name, productType: productType, isOil: isOil, ratedLifeKm: ratedLifeKm, oilIntervalKm: oilIntervalKm, oilIntervalMonths: oilIntervalMonths, oldQty: stockQty, minAlert: minAlert}
 		}
 	}
 
@@ -323,6 +326,7 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 	if req.VehicleID != nil {
 		var tireName, oilName string
 		var tireLifeKm *int
+		var oilIntervalKm, oilIntervalMonths *int
 		for _, item := range req.Items {
 			if item.ProductID == nil {
 				continue
@@ -337,6 +341,8 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 			}
 			if info.isOil && oilName == "" {
 				oilName = info.name
+				oilIntervalKm = info.oilIntervalKm
+				oilIntervalMonths = info.oilIntervalMonths
 			}
 		}
 		occurredAt := time.Now()
@@ -344,12 +350,12 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 			occurredAt = *inv.IssuedAt
 		}
 		if tireName != "" {
-			if err := vehicleevent.LogEvent(ctx, tx, branchID, *req.VehicleID, "tire", req.Mileage, occurredAt, &inv.ID, req.ServiceJobID, tireName, tireLifeKm, &userID); err != nil {
+			if err := vehicleevent.LogEvent(ctx, tx, branchID, *req.VehicleID, "tire", req.Mileage, occurredAt, &inv.ID, req.ServiceJobID, tireName, tireLifeKm, nil, &userID); err != nil {
 				return nil, err
 			}
 		}
 		if oilName != "" {
-			if err := vehicleevent.LogEvent(ctx, tx, branchID, *req.VehicleID, "oil", req.Mileage, occurredAt, &inv.ID, req.ServiceJobID, oilName, nil, &userID); err != nil {
+			if err := vehicleevent.LogEvent(ctx, tx, branchID, *req.VehicleID, "oil", req.Mileage, occurredAt, &inv.ID, req.ServiceJobID, oilName, oilIntervalKm, oilIntervalMonths, &userID); err != nil {
 				return nil, err
 			}
 		}
@@ -527,7 +533,7 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 // gets its due-for-service history. Idempotent per (vehicle, type, invoice).
 func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, vehicleID, invoiceID int64, mileage *int, occurredAt time.Time) error {
 	rows, err := tx.Query(ctx, `
-		SELECT p.type, p.is_oil_product, p.name, p.rated_life_km
+		SELECT p.type, p.is_oil_product, p.name, p.rated_life_km, p.oil_interval_km, p.oil_interval_months
 		FROM invoice_items ii
 		JOIN products p ON p.id = ii.product_id
 		WHERE ii.invoice_id = $1 AND ii.product_id IS NOT NULL`, invoiceID)
@@ -537,13 +543,13 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 	defer rows.Close()
 
 	var tireName, oilName string
-	var tireLifeKm *int
+	var tireLifeKm, oilIntervalKm, oilIntervalMonths *int
 	for rows.Next() {
 		var ptype string
 		var isOil bool
 		var name string
-		var lifeKm *int
-		if err := rows.Scan(&ptype, &isOil, &name, &lifeKm); err != nil {
+		var lifeKm, oilKm, oilMonths *int
+		if err := rows.Scan(&ptype, &isOil, &name, &lifeKm, &oilKm, &oilMonths); err != nil {
 			return fmt.Errorf("scan invoice product: %w", err)
 		}
 		if ptype == "tire" && tireName == "" {
@@ -552,6 +558,8 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 		}
 		if isOil && oilName == "" {
 			oilName = name
+			oilIntervalKm = oilKm
+			oilIntervalMonths = oilMonths
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -560,12 +568,12 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 
 	var invID = invoiceID
 	if tireName != "" {
-		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "tire", mileage, occurredAt, &invID, nil, tireName, tireLifeKm, nil); err != nil {
+		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "tire", mileage, occurredAt, &invID, nil, tireName, tireLifeKm, nil, nil); err != nil {
 			return err
 		}
 	}
 	if oilName != "" {
-		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "oil", mileage, occurredAt, &invID, nil, oilName, nil, nil); err != nil {
+		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "oil", mileage, occurredAt, &invID, nil, oilName, oilIntervalKm, oilIntervalMonths, nil); err != nil {
 			return err
 		}
 	}

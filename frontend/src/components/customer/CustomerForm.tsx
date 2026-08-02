@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import type { CreateCustomerRequest } from '@/types/customer'
+
+const CUSTOMER_TYPES = [
+  { value: 'retail', label: 'Retail Customer' },
+  { value: 'garage', label: 'Garage' },
+  { value: 'company', label: 'Company' },
+] as const
 
 export interface CustomerFormProps {
   initial?: Partial<CreateCustomerRequest>
@@ -14,6 +21,7 @@ export interface CustomerFormProps {
 
 export function CustomerForm({ initial, onSubmit, onCancel, loading }: CustomerFormProps) {
   const [name, setName] = useState(initial?.name || '')
+  const [customerType, setCustomerType] = useState(initial?.customer_type || 'retail')
   const [phone, setPhone] = useState(initial?.phone || '')
   const [email, setEmail] = useState(initial?.email || '')
   const [address, setAddress] = useState(initial?.address || '')
@@ -21,7 +29,7 @@ export function CustomerForm({ initial, onSubmit, onCancel, loading }: CustomerF
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ name, phone, email, address, notes })
+    onSubmit({ name, customer_type: customerType, phone, email, address, notes })
   }
 
   return (
@@ -29,6 +37,14 @@ export function CustomerForm({ initial, onSubmit, onCancel, loading }: CustomerF
       <div className="space-y-1">
         <Label>Name *</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+      <div className="space-y-1">
+        <Label>Customer type</Label>
+        <Select value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
+          {CUSTOMER_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </Select>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
