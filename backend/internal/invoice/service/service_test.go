@@ -225,7 +225,7 @@ func TestInvoiceFrozen(t *testing.T) {
 	assert.Equal(t, "unpaid", inv.PaymentStatus)
 
 	t.Run("rejects add item on issued invoice", func(t *testing.T) {
-		_, err := s.AddItem(context.Background(), branchID, inv.ID, &dto.InvoiceItemReq{
+		_, err := s.AddItem(context.Background(), branchID, userID, inv.ID, &dto.InvoiceItemReq{
 			ProductID: &prodID, ItemType: "product", Description: "Extra", Quantity: 1, UnitPriceUSD: 50,
 		})
 		require.Error(t, err)
@@ -238,7 +238,7 @@ func TestInvoiceFrozen(t *testing.T) {
 		if err != nil {
 			t.Skip("no items to remove")
 		}
-		err = s.RemoveItem(context.Background(), branchID, itemID)
+		err = s.RemoveItem(context.Background(), branchID, userID, itemID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Cannot modify items on a non-draft invoice")
 	})
