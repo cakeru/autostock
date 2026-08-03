@@ -40,6 +40,9 @@ services:
       PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APP_ENV: production
+      # In-app backup schedules (Settings → Backups) write dumps here.
+      BACKUP_DIR: /backups
+      TZ: ${TZ:-Asia/Phnom_Penh}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       UPLOAD_DIR: /app/uploads
       STORAGE_PUBLIC_URL: /uploads
@@ -59,6 +62,8 @@ services:
       # Only needed for STORAGE_DRIVER=local. On R2/S3 this holds nothing and can
       # be dropped, leaving the box stateless for images.
       - uploads_data:/app/uploads
+      # Backup dumps from the in-app schedules (keep them persistent).
+      - backups_data:/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,3 +83,4 @@ services:
 volumes:
   postgres_data:
   uploads_data:
+  backups_data:
