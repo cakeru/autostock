@@ -65,7 +65,9 @@ function ThermalReceipt({ invoice, shop, settings }: { invoice: InvoiceDetail; s
         <div className="flex justify-between"><span>Receipt</span><span>{invoice.invoice_number}</span></div>
         <div className="flex justify-between"><span>Date</span><span>{issuedDate(invoice).toLocaleString()}</span></div>
         <div className="flex justify-between"><span>Customer</span><span>{invoice.customer_name || 'Walk-in'}</span></div>
-        {invoice.plate_number && <div className="flex justify-between"><span>Vehicle</span><span>{invoice.plate_number}</span></div>}
+        {(invoice.plate_number || invoice.vehicle_info) && (
+          <div className="flex justify-between"><span>Vehicle</span><span>{[invoice.vehicle_info, invoice.plate_number].filter(Boolean).join(' · ')}</span></div>
+        )}
         {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} {invoice.mileage_unit === 'mi' ? 'mi' : 'km'}</span></div>}
         {invoice.job_number && <div className="flex justify-between"><span>Job</span><span>{invoice.job_number}</span></div>}
       </div>

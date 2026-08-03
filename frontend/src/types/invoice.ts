@@ -87,6 +87,7 @@ export interface UpdateInvoiceRequest {
   payment_method?: string
   payment_notes?: string
   notes?: string
+  customer_id?: number // 0 = walk-in (clears)
   vehicle_id?: number
   mileage?: number
   clear_vehicle?: boolean

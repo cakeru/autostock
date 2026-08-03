@@ -527,10 +527,11 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		    notes = COALESCE($3, notes),
 		    vehicle_id = CASE WHEN $6 THEN NULL ELSE COALESCE($4, vehicle_id) END,
 		    mileage = COALESCE($5, mileage),
+		    customer_id = CASE WHEN $9 IS NULL THEN customer_id WHEN $9 = 0 THEN NULL ELSE $9 END,
 		    updated_at = NOW()
 		WHERE id = $7 AND branch_id = $8`,
 		req.PaymentMethod, req.PaymentNotes, req.Notes, req.VehicleID, req.Mileage,
-		req.ClearVehicle, id, branchID)
+		req.ClearVehicle, id, branchID, req.CustomerID)
 	if err != nil {
 		return nil, fmt.Errorf("update invoice: %w", err)
 	}

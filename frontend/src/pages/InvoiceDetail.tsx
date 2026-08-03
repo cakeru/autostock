@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { Printer, Receipt, Undo2, Send, Pencil, Trash2, X, FileImage } from 'lucide-react'
 import { useSendToTelegram } from '@/hooks/useSendToTelegram'
 import { useInvoice, useUpdateInvoice, useVoidInvoice, useRecordPayment, useUpdatePayment, useDeletePayment, useUploadPaymentProof, useUpdateInvoiceItem, useAddInvoiceItem, useRemoveInvoiceItem } from '@/hooks/useInvoices'
-import { useCustomerVehicles } from '@/hooks/useCustomers'
+import { useCustomers, useCustomerVehicles } from '@/hooks/useCustomers'
 import { useProducts } from '@/hooks/useProducts'
 import { useInvoiceReturns, useUndoReturn } from '@/hooks/useReturns'
 import { ReturnDialog } from '@/components/invoice/ReturnDialog'
@@ -408,12 +408,16 @@ function EditVehicleDialog({ invoice, unitLabel, onClose, onSave, loading }: {
   onSave: (data: UpdateInvoiceRequest) => void
   loading: boolean
 }) {
-  const { data: vehicles } = useCustomerVehicles(invoice.customer_id || 0)
+  const { data: customersData } = useCustomers({ per_page: 100 })
+  const customers = customersData?.data || []
+  const [customerId, setCustomerId] = useState(invoice.customer_id ? String(invoice.customer_id) : '')
+  const { data: vehicles } = useCustomerVehicles(customerId ? parseInt(customerId) : 0)
   const [vehicleId, setVehicleId] = useState(invoice.vehicle_id ? String(invoice.vehicle_id) : '')
   const [mileage, setMileage] = useState(invoice.mileage != null ? String(invoice.mileage) : '')
 
   const submit = () => {
     onSave({
+      customer_id: customerId ? parseInt(customerId) : 0,
       vehicle_id: vehicleId ? parseInt(vehicleId) : undefined,
       clear_vehicle: !vehicleId,
       mileage: mileage ? parseInt(mileage) : undefined,
@@ -423,12 +427,27 @@ function EditVehicleDialog({ invoice, unitLabel, onClose, onSave, loading }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-card rounded-lg p-5 shadow-lg w-full max-w-sm mx-4">
-        <p className="text-sm font-semibold mb-1">Edit vehicle</p>
+        <p className="text-sm font-semibold mb-1">Edit customer &amp; vehicle</p>
         <p className="text-xs text-muted-foreground mb-3">{invoice.invoice_number}</p>
         <div className="space-y-2">
           <div className="space-y-1">
+            <label className="text-xs font-medium">Customer</label>
+            <Select
+              value={customerId}
+              onChange={(e) => {
+                setCustomerId(e.target.value)
+                setVehicleId('') // the current vehicle belongs to the old customer
+              }}
+            >
+              <option value="">Walk-in (no customer)</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1">
             <label className="text-xs font-medium">Vehicle</label>
-            <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+            <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} disabled={!customerId}>
               <option value="">No vehicle</option>
               {(vehicles || []).map((v) => (
                 <option key={v.id} value={v.id}>{v.plate_number}{v.make || v.model ? ` — ${[v.make, v.model].filter(Boolean).join(' ')}` : ''}</option>

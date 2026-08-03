@@ -45,6 +45,7 @@ type UpdateInvoiceRequest struct {
 	PaymentMethod *string `json:"payment_method,omitempty"`
 	PaymentNotes  *string `json:"payment_notes,omitempty"`
 	Notes         *string `json:"notes,omitempty"`
+	CustomerID    *int64  `json:"customer_id,omitempty"` // 0 = walk-in (clears); omitted = unchanged
 	VehicleID     *int64  `json:"vehicle_id,omitempty"`
 	Mileage       *int    `json:"mileage,omitempty"`
 	ClearVehicle  bool    `json:"clear_vehicle,omitempty"`
