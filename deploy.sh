@@ -46,6 +46,8 @@ elif [ -n "$BUILD_FRONTEND" ]; then
   docker compose -f "$COMPOSE_FILE" build frontend
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d $BUILD_BACKEND $BUILD_FRONTEND
+# --remove-orphans clears containers for services removed from the compose file
+# (e.g. the old fixed nightly `backup` service, replaced by in-app schedules).
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans $BUILD_BACKEND $BUILD_FRONTEND
 echo "$NEW_SHA" > "${REPO_PATH:-/repo}/.deploy-sha"
 echo "[deploy] done"
