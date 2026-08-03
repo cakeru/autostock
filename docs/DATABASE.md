@@ -503,6 +503,33 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id, created_at DESC);
 ```
 
+### Backup Tables
+
+#### backup_schedules
+User-configurable database dump schedules (managed in Settings → Backups).
+Instance-wide (one database per server), so no `branch_id`.
+
+```sql
+CREATE TABLE backup_schedules (
+    id             BIGSERIAL PRIMARY KEY,
+    name           TEXT NOT NULL,
+    cron           TEXT NOT NULL,               -- 5-field: minute hour day month weekday
+    enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+    retention_days INTEGER NOT NULL DEFAULT 14,
+    last_run_at    TIMESTAMPTZ,
+    last_status    TEXT NOT NULL DEFAULT 'never', -- never | success | error
+    last_error     TEXT NOT NULL DEFAULT '',
+    next_run_at    TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Dumps are gzipped `pg_dump` files named `autostock-<schedule-id>-<slug>-<ts>.sql.gz`
+inside `BACKUP_DIR`; files older than `retention_days` are pruned by the
+backend scheduler. Migration `000045` seeds a default "Nightly backup"
+(`0 2 * * *`, 14 days).
+
 ## Data Types & Conventions
 
 ### Primary Keys

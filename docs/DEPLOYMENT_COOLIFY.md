@@ -151,6 +151,10 @@ did Step 4).
 - **In-app monthly backup** — Settings → Telegram, route the **Monthly database
   backup** topic to a channel; the app sends a gzipped `pg_dump` monthly.
   Off-site copy for free.
+- **In-app schedules** — Settings → Backups lets the shop owner create any
+  number of automatic `pg_dump` schedules (daily/weekly/custom cron, retention,
+  run-now, per-schedule download). Backups land in the backend's `BACKUP_DIR`
+  mount.
 - **Scheduled dump to the bucket (recommended)** — add a Coolify **Scheduled
   Task** on this resource, container `postgres`, e.g. daily:
   ```bash

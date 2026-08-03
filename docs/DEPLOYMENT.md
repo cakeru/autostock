@@ -628,6 +628,17 @@ server {
 
 ### Automated Database Backups
 
+**Recommended: in-app schedules.** Settings → Backups lets an admin create any
+number of dump schedules (daily/weekly/every-N-hours/custom cron, retention
+days, enable/disable, run-now, and per-schedule download). Each schedule runs
+inside the backend, writes a gzipped `pg_dump` into `BACKUP_DIR`, and prunes
+files older than its retention setting. A default "Nightly backup" (02:00,
+kept 14 days) is created by the migration. Schedule times are in the server
+timezone (`TZ`, default `Asia/Phnom_Penh`).
+
+The manual script below is an alternative for setups that don't want to use
+the app's scheduler.
+
 **Create Backup Script:**
 
 ```bash

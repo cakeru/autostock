@@ -1512,6 +1512,98 @@ Content-Disposition: attachment; filename="INV-2026-0001.pdf"
 }
 ```
 
+## Backup Schedules
+
+User-configurable database dump schedules (managed in Settings → Backups).
+Schedules are instance-wide (one database per server), not per-branch.
+
+### List Backup Schedules
+
+**Endpoint:** `GET /api/v1/backup-schedules`
+
+**Permissions:** `settings:view`
+
+**Response (200 OK):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Nightly backup",
+      "cron": "0 2 * * *",
+      "enabled": true,
+      "retention_days": 14,
+      "last_run_at": "2026-08-03T11:18:05+07:00",
+      "last_status": "success",
+      "last_error": "",
+      "next_run_at": "2026-08-04T02:00:00+07:00",
+      "latest_file": "autostock-1-nightly-backup-2026-08-03-111805.sql.gz"
+    }
+  ]
+}
+```
+
+`cron` uses the standard 5-field form (`minute hour day month weekday`) and is
+evaluated in the server timezone (`TZ`, default `Asia/Phnom_Penh`).
+`last_status` is `never`, `success`, or `error`.
+
+### Create Backup Schedule
+
+**Endpoint:** `POST /api/v1/backup-schedules`
+
+**Permissions:** `settings:update`
+
+**Request:**
+```json
+{
+  "name": "Nightly backup",
+  "cron": "0 2 * * *",
+  "enabled": true,
+  "retention_days": 14
+}
+```
+
+### Update Backup Schedule
+
+**Endpoint:** `PUT /api/v1/backup-schedules/:id`
+
+**Permissions:** `settings:update`
+
+Same request body as create.
+
+### Delete Backup Schedule
+
+**Endpoint:** `DELETE /api/v1/backup-schedules/:id`
+
+**Permissions:** `settings:update`
+
+Removes the schedule; existing dump files stay on the server.
+
+### Run Backup Now
+
+**Endpoint:** `POST /api/v1/backup-schedules/:id/run`
+
+**Permissions:** `settings:update`
+
+Runs `pg_dump` immediately and updates the schedule's status.
+
+### Download Schedule's Latest Backup
+
+**Endpoint:** `GET /api/v1/backup-schedules/:id/latest`
+
+**Permissions:** `settings:view`
+
+Streams the newest gzipped dump produced by that schedule
+(`Content-Type: application/gzip`).
+
+### Download Latest Backup (any schedule)
+
+**Endpoint:** `GET /api/v1/settings/backup/latest`
+
+**Permissions:** `settings:view`
+
+Streams the most recent dump regardless of which schedule produced it.
+
 ## Dashboard
 
 ### Get Dashboard Summary
