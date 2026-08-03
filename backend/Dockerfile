@@ -7,14 +7,16 @@ RUN apk add --no-cache gcc musl-dev
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
-
+# The migrate CLI is independent of the app source, so install it before
+# copying the code in — Docker caches this layer and updates stop recompiling it.
 RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o autostock ./cmd/server
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -o autostock ./cmd/server
 # One-time storage backfill tool (local disk → object bucket). Run on demand:
 #   docker compose run --rm --entrypoint /app/migrate-storage backend [-dry-run]
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate-storage ./cmd/migrate-storage
+RUN CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -o migrate-storage ./cmd/migrate-storage
 
 FROM alpine:latest
 
