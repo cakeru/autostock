@@ -44,15 +44,19 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
-      # Folder holding the nightly database backups (the host folder is chosen
-      # by the bind-mount below); served by the Settings "Download backup" button.
+      # Folder holding the database backups written by the in-app backup
+      # schedules (Settings → Backups); served by the download buttons. The
+      # bind-mount below is read-write because the backend runs pg_dump itself.
       BACKUP_DIR: /backups
+      # Shop timezone — cron schedules and date-sensitive logic (invoice
+      # numbering) run in this zone rather than UTC.
+      TZ: ${TZ:-Asia/Phnom_Penh}
       # "Update now" agent (compose service `updater`); the Settings button is
       # hidden/disabled when unset.
       UPDATER_URL: ${UPDATER_URL:-http://updater:8081}
     volumes:
       - uploads_data:/app/uploads
-      - ${BACKUP_DIR:-./backups}:/backups:ro
+      - ${BACKUP_DIR:-./backups}:/backups
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -70,29 +74,6 @@ services:
       - "3000:80"
     depends_on:
       - backend
-
-  # Nightly pg_dump of the whole database into the host folder (kept 14 days).
-  # Point BACKUP_DIR at a different host path (e.g. /srv/autostock/backups) on
-  # the server. Restore with:
-  #   gunzip -c backups/autostock-<stamp>.sql.gz | docker compose exec -T postgres psql -U autostock autostock
-  backup:
-    image: postgres:15-alpine
-    container_name: autostock-backup
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgres://autostock:${DB_PASSWORD:-autostock123}@postgres:5432/autostock
-    volumes:
-      - ${BACKUP_DIR:-./backups}:/backups
-    depends_on:
-      - postgres
-    command: >
-      /bin/sh -c 'while true; do
-        FILENAME="/backups/autostock-$(date +%Y%m%d-%H%M%S).sql.gz";
-        pg_dump "$$DATABASE_URL" | gzip > "$$FILENAME" &&
-        echo "Backup written: $$FILENAME";
-        find /backups -name "autostock-*.sql.gz" -mtime +14 -delete;
-        sleep 86400;
-      done'
 
   # "Update now" agent (Settings page): holds the Docker socket + repo checkout
   # and runs deploy.sh on demand. Deliberately not rebuilt by the deploy, so it

@@ -13,6 +13,7 @@ import { PACKAGES, LABOR_PRESETS, FEE_PRESETS, DEFAULT_PAYMENT_METHODS, parseArr
 import type { SalePackage, Preset } from '@/lib/packages'
 import { downloadFile } from '@/utils/download'
 import { TelegramSettings } from '@/components/settings/TelegramSettings'
+import { BackupSchedules } from '@/components/settings/BackupSchedules'
 import api from '@/services/api'
 
 function useSavedTimeout() {
@@ -227,17 +228,13 @@ export function Settings() {
 
       <UpdatesSection />
 
-      <Section title="Backups" description="The whole database is dumped automatically every night into the server's backup folder (kept 14 days)">
-        <div className="space-y-3 max-w-md">
-          <div className="text-xs text-muted-foreground">
-            Copies land in the folder set by <code className="font-mono">BACKUP_DIR</code> on the server (default <code className="font-mono">./backups</code> next to docker-compose.yml). Download the latest here — keep a copy somewhere off the server (USB stick, Google Drive, etc.) so a dead server never means lost data.
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => downloadFile('/settings/backup/latest', 'autostock-backup.sql.gz').catch(() => {})}>
-              <Download className="h-3.5 w-3.5" /> Download latest backup
-            </Button>
-          </div>
+      <Section title="Backups" description="Full database dumps on schedules you control. Keep a copy somewhere off the server too (USB stick, Google Drive, …).">
+        <div className="flex gap-2 mb-3">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => downloadFile('/settings/backup/latest', 'autostock-backup.sql.gz').catch(() => {})}>
+            <Download className="h-3.5 w-3.5" /> Download latest backup
+          </Button>
         </div>
+        <BackupSchedules />
       </Section>
 
       <Section title="Distance Units" description="The unit used for odometer readings and service intervals (sale, invoices, vehicle profiles)">

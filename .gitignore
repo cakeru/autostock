@@ -55,7 +55,7 @@ backend/test-results/
 secrets/
 
 # Backups
-backups/
+/backups/
 *.sql.gz
 
 # Go

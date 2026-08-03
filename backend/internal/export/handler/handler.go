@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -53,26 +53,29 @@ func (h *Handler) ExportProducts(c *gin.Context) {
 	})
 }
 
-// DownloadLatestBackup streams the most recent nightly database dump.
+// DownloadLatestBackup streams the most recent database dump regardless of
+// which schedule produced it.
 func (h *Handler) DownloadLatestBackup(c *gin.Context) {
 	entries, err := os.ReadDir(h.backupDir)
 	if err != nil || len(entries) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NO_BACKUP", "message": "No backups yet — the nightly job writes its first dump within 24h"}})
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NO_BACKUP", "message": "No backups yet — run a backup schedule or wait for the next scheduled run"}})
 		return
 	}
 
-	var dumps []string
+	var latest string
+	var latestTime time.Time
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasPrefix(e.Name(), "autostock-") && strings.HasSuffix(e.Name(), ".sql.gz") {
-			dumps = append(dumps, e.Name())
+			if info, err := e.Info(); err == nil && info.ModTime().After(latestTime) {
+				latestTime = info.ModTime()
+				latest = e.Name()
+			}
 		}
 	}
-	if len(dumps) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NO_BACKUP", "message": "No backups yet — the nightly job writes its first dump within 24h"}})
+	if latest == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NO_BACKUP", "message": "No backups yet — run a backup schedule or wait for the next scheduled run"}})
 		return
 	}
-	sort.Strings(dumps)
-	latest := dumps[len(dumps)-1]
 
 	c.Header("Content-Type", "application/gzip")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", latest))

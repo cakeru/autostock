@@ -17,6 +17,8 @@ import (
 	auditHandler "github.com/cakeru/autostock/internal/audit/handler"
 	authHandler "github.com/cakeru/autostock/internal/auth/handler"
 	authService "github.com/cakeru/autostock/internal/auth/service"
+	backupsHandler "github.com/cakeru/autostock/internal/backups/handler"
+	backupsService "github.com/cakeru/autostock/internal/backups/service"
 	cashshiftHandler "github.com/cakeru/autostock/internal/cashshift/handler"
 	"github.com/cakeru/autostock/internal/config"
 	customerHandler "github.com/cakeru/autostock/internal/customer/handler"
@@ -85,6 +87,8 @@ func main() {
 	invoiceH := invoiceHandler.NewHandler(pool, store)
 	exportH := exportHandler.NewHandler(pool, cfg.BackupDir)
 	updateH := updateHandler.NewHandler(cfg.UpdaterURL)
+	backupSvc := backupsService.NewService(pool, cfg.BackupDir, cfg.DatabaseURL)
+	backupH := backupsHandler.NewHandler(backupSvc)
 	dashboardH := dashboardHandler.NewHandler(pool)
 	analyticsH := analyticsHandler.NewHandler(pool)
 	auditH := auditHandler.NewHandler(pool)
@@ -331,6 +335,17 @@ func main() {
 			set.GET("/backup/latest", middleware.PermissionMiddleware("settings:view"), exportH.DownloadLatestBackup)
 		}
 
+		bks := v1.Group("/backup-schedules")
+		bks.Use(middleware.AuthMiddleware(cfg.JWTSecret, pool))
+		{
+			bks.GET("", middleware.PermissionMiddleware("settings:view"), backupH.List)
+			bks.POST("", middleware.PermissionMiddleware("settings:update"), backupH.Create)
+			bks.PUT("/:id", middleware.PermissionMiddleware("settings:update"), backupH.Update)
+			bks.DELETE("/:id", middleware.PermissionMiddleware("settings:update"), backupH.Delete)
+			bks.POST("/:id/run", middleware.PermissionMiddleware("settings:update"), backupH.RunNow)
+			bks.GET("/:id/latest", middleware.PermissionMiddleware("settings:view"), backupH.DownloadLatest)
+		}
+
 		dash := v1.Group("/dashboard")
 		dash.Use(middleware.AuthMiddleware(cfg.JWTSecret, pool))
 		dash.Use(middleware.PermissionMiddleware("report:view"))
@@ -434,6 +449,7 @@ func main() {
 	defer bgCancel()
 	go telegramSvc.RunDeliveryLoop(bgCtx)
 	go telegramSvc.RunScheduler(bgCtx)
+	go backupSvc.Run(bgCtx)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
