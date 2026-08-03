@@ -64,7 +64,7 @@ function ThermalReceipt({ invoice, shop, settings }: { invoice: InvoiceDetail; s
       <div className="mb-2 border-y border-dashed border-black py-1">
         <div className="flex justify-between"><span>Receipt</span><span>{invoice.invoice_number}</span></div>
         <div className="flex justify-between"><span>Date</span><span>{issuedDate(invoice).toLocaleString()}</span></div>
-        {invoice.customer_name && <div className="flex justify-between"><span>Customer</span><span>{invoice.customer_name}</span></div>}
+        <div className="flex justify-between"><span>Customer</span><span>{invoice.customer_name || 'Walk-in'}</span></div>
         {invoice.plate_number && <div className="flex justify-between"><span>Vehicle</span><span>{invoice.plate_number}</span></div>}
         {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} {invoice.mileage_unit === 'mi' ? 'mi' : 'km'}</span></div>}
         {invoice.job_number && <div className="flex justify-between"><span>Job</span><span>{invoice.job_number}</span></div>}
@@ -158,7 +158,7 @@ function ClassicInvoice({ invoice, settings }: { invoice: InvoiceDetail; setting
       <div className="mb-3 grid grid-cols-2 gap-x-8">
         <div className="space-y-1">
           <MetaLine kh="អ្នកលក់ៈ" value={invoice.created_by_name || 'Admin'} />
-          <MetaLine kh="អតិថិជនៈ" value={invoice.customer_name} />
+          <MetaLine kh="អតិថិជនៈ" value={invoice.customer_name || 'Walk-in'} />
           <MetaLine kh="ស្លាកលេខៈ" value={invoice.plate_number} />
           <MetaLine kh="ម៉ាកយានយន្តៈ" value={invoice.vehicle_info} />
         </div>
