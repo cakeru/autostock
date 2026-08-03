@@ -27,6 +27,10 @@ export const expensesApi = {
     const res = await api.post('/expenses', data)
     return res.data.data
   },
+  update: async (id: number, data: CreateExpenseRequest): Promise<Expense> => {
+    const res = await api.put(`/expenses/${id}`, data)
+    return res.data.data
+  },
   remove: async (id: number): Promise<void> => {
     await api.delete(`/expenses/${id}`)
   },

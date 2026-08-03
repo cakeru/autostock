@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/cakeru/autostock/internal/domain"
@@ -34,6 +35,28 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 		Scan(&e.ID, &e.Category, &e.Description, &e.AmountUSD, &e.SpentAt, &e.CreatedBy, &e.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create expense: %w", err)
+	}
+	return &e, nil
+}
+
+func (s *Service) Update(ctx context.Context, branchID, id int64, req *dto.CreateExpenseRequest) (*dto.ExpenseResponse, error) {
+	spentAt := req.SpentAt
+	if spentAt == "" {
+		spentAt = time.Now().Format("2006-01-02")
+	}
+	var e dto.ExpenseResponse
+	err := s.pool.QueryRow(ctx, `
+		UPDATE expenses
+		SET category = $1, description = $2, amount_usd = $3, spent_at = $4::date
+		WHERE id = $5 AND branch_id = $6
+		RETURNING id, category, COALESCE(description, ''), amount_usd, spent_at::text, created_by, created_at::text`,
+		req.Category, req.Description, req.AmountUSD, spentAt, id, branchID).
+		Scan(&e.ID, &e.Category, &e.Description, &e.AmountUSD, &e.SpentAt, &e.CreatedBy, &e.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update expense: %w", err)
 	}
 	return &e, nil
 }

@@ -28,6 +28,18 @@ func NewHandler(pool *pgxpool.Pool, store storage.Storage) *Handler {
 }
 
 const maxProofBytes = 10 << 20 // 10 MB upload cap
+
+func writeInvoiceError(c *gin.Context, err error) {
+	if appErr, ok := err.(*domain.AppError); ok {
+		c.JSON(appErr.Status, gin.H{"error": gin.H{"code": appErr.Code, "message": appErr.Message}})
+		return
+	}
+	if err == domain.ErrNotFound {
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "Not found"}})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": err.Error()}})
+}
 const maxProofDim = 1600
 
 func (h *Handler) List(c *gin.Context) {
@@ -213,6 +225,51 @@ func (h *Handler) RecordPayment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"data": payment})
+}
+
+func (h *Handler) UpdatePayment(c *gin.Context) {
+	branchID, _ := c.Get("branch_id")
+	userID, _ := c.Get("user_id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": "Invalid invoice ID"}})
+		return
+	}
+	paymentID, err := strconv.ParseInt(c.Param("payment_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": "Invalid payment ID"}})
+		return
+	}
+	var req dto.RecordPaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "VALIDATION_ERROR", "message": err.Error()}})
+		return
+	}
+	payment, err := h.service.UpdatePayment(c.Request.Context(), branchID.(int64), id, paymentID, userID.(int64), &req)
+	if err != nil {
+		writeInvoiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": payment})
+}
+
+func (h *Handler) DeletePayment(c *gin.Context) {
+	branchID, _ := c.Get("branch_id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": "Invalid invoice ID"}})
+		return
+	}
+	paymentID, err := strconv.ParseInt(c.Param("payment_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": "Invalid payment ID"}})
+		return
+	}
+	if err := h.service.DeletePayment(c.Request.Context(), branchID.(int64), id, paymentID); err != nil {
+		writeInvoiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"deleted": true}})
 }
 
 func (h *Handler) ListPayments(c *gin.Context) {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Pencil, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { formatUSD } from '@/utils/currency'
 import { reportsApi } from '@/services/settings'
 import { usePnL } from '@/hooks/useAnalytics'
-import { useExpenses, useCreateExpense, useDeleteExpense } from '@/hooks/useExpenses'
+import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useExpenses'
+import type { Expense } from '@/services/expenses'
 import { StatCard, Panel, RangeBar, monthStart, today, DataTable } from './shared'
 
 export function PnLAnalytics() {
@@ -109,19 +110,32 @@ function PnLLine({ label, value, bold, muted, indent, top }: { label: string; va
 function ExpensesManager({ from, to }: { from: string; to: string }) {
   const { data: expenses, isLoading } = useExpenses(from, to)
   const create = useCreateExpense()
+  const update = useUpdateExpense()
   const del = useDeleteExpense()
+  const [editing, setEditing] = useState<Expense | null>(null)
   const [category, setCategory] = useState('')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [spentAt, setSpentAt] = useState(today())
 
+  const resetForm = () => { setEditing(null); setCategory(''); setAmount(''); setDescription(''); setSpentAt(today()) }
+  const startEdit = (e: Expense) => {
+    setEditing(e)
+    setCategory(e.category)
+    setAmount(String(e.amount_usd))
+    setDescription(e.description || '')
+    setSpentAt(e.spent_at)
+  }
+
   const submit = () => {
     const amt = parseFloat(amount)
     if (!category.trim() || !amt || amt <= 0) return
-    create.mutate(
-      { category: category.trim(), amount_usd: amt, description: description.trim() || undefined, spent_at: spentAt },
-      { onSuccess: () => { setCategory(''); setAmount(''); setDescription('') } }
-    )
+    const payload = { category: category.trim(), amount_usd: amt, description: description.trim() || undefined, spent_at: spentAt }
+    if (editing) {
+      update.mutate({ id: editing.id, data: payload }, { onSuccess: resetForm })
+    } else {
+      create.mutate(payload, { onSuccess: resetForm })
+    }
   }
 
   return (
@@ -146,9 +160,15 @@ function ExpensesManager({ from, to }: { from: string; to: string }) {
           <label className="text-xs text-muted-foreground">Note (optional)</label>
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" />
         </div>
-        <Button size="sm" className="gap-1" onClick={submit} disabled={create.isPending || !category.trim() || !(parseFloat(amount) > 0)}>
-          <Plus className="h-4 w-4" /> {create.isPending ? 'Adding…' : 'Add'}
-        </Button>
+        <div className="flex gap-2">
+          {editing && (
+            <Button size="sm" variant="ghost" onClick={resetForm} aria-label="Cancel edit"><X className="h-4 w-4" /></Button>
+          )}
+          <Button size="sm" className="gap-1" onClick={submit} disabled={create.isPending || update.isPending || !category.trim() || !(parseFloat(amount) > 0)}>
+            {editing ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-4 w-4" />}
+            {create.isPending || update.isPending ? 'Saving…' : editing ? 'Save' : 'Add'}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? <Skeleton className="h-24 w-full" /> : (
@@ -157,9 +177,10 @@ function ExpensesManager({ from, to }: { from: string; to: string }) {
           rowKey={(e) => e.id}
           empty="No expenses in this range"
           action={(e) => (
-            <button onClick={() => del.mutate(e.id)} className="text-muted-foreground hover:text-destructive" aria-label="Delete expense">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => startEdit(e)} className="text-muted-foreground hover:text-foreground" aria-label="Edit expense"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => del.mutate(e.id)} className="text-muted-foreground hover:text-destructive" aria-label="Delete expense"><Trash2 className="h-4 w-4" /></button>
+            </div>
           )}
           columns={[
             { header: 'Date', cell: (e) => <span className="tabular-nums text-muted-foreground">{e.spent_at}</span> },

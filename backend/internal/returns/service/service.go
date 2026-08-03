@@ -169,9 +169,9 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 	// Store-credit refunds become a held deposit the customer can spend later.
 	if req.RefundMethod == "store_credit" && customerID != nil {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO deposits (branch_id, customer_id, amount, note, created_by)
-			VALUES ($1, $2, $3, $4, $5)`,
-			branchID, *customerID, refundTotal, "Store credit from return", userID); err != nil {
+			INSERT INTO deposits (branch_id, customer_id, amount, note, created_by, return_id)
+			VALUES ($1, $2, $3, $4, $5, $6)`,
+			branchID, *customerID, refundTotal, "Store credit from return", userID, returnID); err != nil {
 			return nil, fmt.Errorf("store credit: %w", err)
 		}
 	}
@@ -201,4 +201,125 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 		}
 	}
 	return nil, nil
+}
+
+// Undo reverses a return: restores the invoice's refund state, removes the
+// store-credit deposit it created, and takes the restocked inventory back out.
+// It refuses when the returned stock has already been sold again (its batch
+// was consumed) — reversing that would corrupt the FIFO ledger.
+func (s *Service) Undo(ctx context.Context, branchID, userID, returnID int64) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var invoiceID int64
+	if err := tx.QueryRow(ctx, `SELECT invoice_id FROM returns WHERE id = $1 AND branch_id = $2 FOR UPDATE`, returnID, branchID).
+		Scan(&invoiceID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get return: %w", err)
+	}
+
+	var invStatus string
+	if err := tx.QueryRow(ctx, `SELECT status FROM invoices WHERE id = $1 FOR UPDATE`, invoiceID).Scan(&invStatus); err != nil {
+		return fmt.Errorf("get invoice: %w", err)
+	}
+	if invStatus == "voided" {
+		return &domain.AppError{Code: "VOIDED", Message: "Cannot undo a return on a voided invoice", Status: 400}
+	}
+
+	// Reverse the restock: only safe while the return's batch is untouched
+	// (quantity_remaining == quantity_received). Otherwise the stock has
+	// already been sold again and the ledger can't be cleanly unwound.
+	rows, err := tx.Query(ctx, `
+		SELECT id, product_id, quantity_change, batch_id FROM stock_movements
+		WHERE reference_type = 'return' AND reference_id = $1 AND quantity_change > 0`, returnID)
+	if err != nil {
+		return fmt.Errorf("list return movements: %w", err)
+	}
+	type mv struct {
+		id        int64
+		productID int64
+		qty       float64
+		batchID   *int64
+	}
+	var movements []mv
+	for rows.Next() {
+		var m mv
+		if err := rows.Scan(&m.id, &m.productID, &m.qty, &m.batchID); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan movement: %w", err)
+		}
+		movements = append(movements, m)
+	}
+	rows.Close()
+
+	for _, m := range movements {
+		if m.batchID != nil {
+			var received, remaining float64
+			if err := tx.QueryRow(ctx, `SELECT quantity_received, quantity_remaining FROM batches WHERE id = $1 FOR UPDATE`, *m.batchID).
+				Scan(&received, &remaining); err != nil {
+				return fmt.Errorf("get batch: %w", err)
+			}
+			if remaining != received {
+				return &domain.AppError{
+					Code:    "RETURN_STOCK_SOLD",
+					Message: "This return's restocked items have already been sold again — undo isn't possible. Adjust stock manually instead.",
+					Status:  400,
+				}
+			}
+		}
+	}
+	for _, m := range movements {
+		if _, err := tx.Exec(ctx, `DELETE FROM stock_movements WHERE id = $1`, m.id); err != nil {
+			return fmt.Errorf("delete movement: %w", err)
+		}
+		if m.batchID != nil {
+			if _, err := tx.Exec(ctx, `DELETE FROM batches WHERE id = $1`, *m.batchID); err != nil {
+				return fmt.Errorf("delete batch: %w", err)
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND branch_id = $3`,
+			m.qty, m.productID, branchID); err != nil {
+			return fmt.Errorf("deduct restock: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM deposits WHERE return_id = $1`, returnID); err != nil {
+		return fmt.Errorf("delete deposit: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM return_items WHERE return_id = $1`, returnID); err != nil {
+		return fmt.Errorf("delete return items: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM returns WHERE id = $1`, returnID); err != nil {
+		return fmt.Errorf("delete return: %w", err)
+	}
+
+	// Recompute the invoice's refunded flag from the remaining returns.
+	var totalReturned, invTotal, paid float64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(SUM(refund_amount), 0) FROM returns WHERE invoice_id = $1`, invoiceID).Scan(&totalReturned); err != nil {
+		return fmt.Errorf("sum returns: %w", err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT total_usd, paid_amount FROM invoices WHERE id = $1`, invoiceID).Scan(&invTotal, &paid); err != nil {
+		return fmt.Errorf("get invoice totals: %w", err)
+	}
+	if totalReturned < invTotal-0.001 {
+		paymentStatus := "unpaid"
+		if paid >= invTotal-0.001 {
+			paymentStatus = "paid"
+		} else if paid > 0 {
+			paymentStatus = "partial"
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invoices SET payment_status = $1, updated_at = NOW() WHERE id = $2`, paymentStatus, invoiceID); err != nil {
+			return fmt.Errorf("restore payment status: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }

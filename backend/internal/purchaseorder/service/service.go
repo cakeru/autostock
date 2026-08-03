@@ -69,6 +69,36 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 	return s.getListItem(ctx, branchID, id)
 }
 
+// Update edits a draft order's supplier and notes (ordered/received orders are
+// locked — correct them by cancelling and reordering).
+func (s *Service) Update(ctx context.Context, branchID, id int64, req *dto.CreatePORequest) (*dto.POListResponse, error) {
+	st, err := s.status(ctx, branchID, id)
+	if err != nil {
+		return nil, err
+	}
+	if st != "draft" {
+		return nil, &domain.AppError{Code: "PO_NOT_DRAFT", Message: "Only draft orders can be edited — cancel and reorder instead", Status: 400}
+	}
+	var supplierExists bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM suppliers WHERE id = $1 AND branch_id = $2 AND is_active)`,
+		req.SupplierID, branchID).Scan(&supplierExists); err != nil {
+		return nil, fmt.Errorf("check supplier: %w", err)
+	}
+	if !supplierExists {
+		return nil, domain.ErrNotFound
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE purchase_orders SET supplier_id = $1, notes = NULLIF($2, '') WHERE id = $3 AND branch_id = $4`,
+		req.SupplierID, req.Notes, id, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("update po: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getListItem(ctx, branchID, id)
+}
+
 func (s *Service) List(ctx context.Context, branchID int64) ([]dto.POListResponse, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT po.id, po.po_number, po.status, po.supplier_id, sup.name, COALESCE(po.notes, ''),

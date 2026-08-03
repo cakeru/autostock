@@ -90,6 +90,8 @@ type CreateServiceEventRequest struct {
 	OccurredAt  string `json:"occurred_at,omitempty"` // YYYY-MM-DD; defaults to today
 	ProductName string `json:"product_name,omitempty"`
 	LifeKm      *int   `json:"life_km,omitempty"` // tire only: km life for this install
+	LifeDays    *int   `json:"life_days,omitempty"`
+	LifeMonths  *int   `json:"life_months,omitempty"`
 }
 
 // DueStatus is computed per reminder for one vehicle: where it stands against

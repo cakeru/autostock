@@ -51,6 +51,24 @@ export function useRecordPayment() {
   })
 }
 
+export function useUpdatePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, paymentId, data }: { id: number; paymentId: number; data: RecordPaymentRequest }) =>
+      invoicesApi.updatePayment(id, paymentId, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); qc.invalidateQueries({ queryKey: ['invoice'] }); toast.success('Payment updated') },
+  })
+}
+
+export function useDeletePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, paymentId }: { id: number; paymentId: number }) =>
+      invoicesApi.deletePayment(id, paymentId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); qc.invalidateQueries({ queryKey: ['invoice'] }); toast.success('Payment deleted') },
+  })
+}
+
 export function useUploadPaymentProof() {
   const qc = useQueryClient()
   return useMutation({

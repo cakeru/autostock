@@ -26,6 +26,18 @@ export function useCreatePurchaseOrder() {
   })
 }
 
+export function useUpdatePurchaseOrder(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreatePORequest) => purchaseOrdersApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', id] })
+      toast.success('Order updated')
+    },
+  })
+}
+
 export function useAddPOItem(poId: number) {
   const queryClient = useQueryClient()
   return useMutation({

@@ -19,6 +19,17 @@ export function useCreateExpense() {
   })
 }
 
+export function useUpdateExpense() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: CreateExpenseRequest }) => expensesApi.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses'] })
+      qc.invalidateQueries({ queryKey: ['analytics', 'pnl'] })
+    },
+  })
+}
+
 export function useDeleteExpense() {
   const qc = useQueryClient()
   return useMutation({

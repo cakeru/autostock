@@ -193,6 +193,7 @@ func main() {
 			po.GET("", middleware.PermissionMiddleware("inventory:view"), purchaseorderH.List)
 			po.GET("/:id", middleware.PermissionMiddleware("inventory:view"), purchaseorderH.Get)
 			po.POST("", middleware.PermissionMiddleware("inventory:update"), purchaseorderH.Create)
+			po.PUT("/:id", middleware.PermissionMiddleware("inventory:update"), purchaseorderH.Update)
 			po.POST("/:id/items", middleware.PermissionMiddleware("inventory:update"), purchaseorderH.AddItem)
 			po.POST("/:id/place", middleware.PermissionMiddleware("inventory:update"), purchaseorderH.Place)
 			po.POST("/:id/cancel", middleware.PermissionMiddleware("inventory:update"), purchaseorderH.Cancel)
@@ -243,12 +244,16 @@ func main() {
 		// vehicle route; the random share token is the authorization.
 		v1.GET("/public/vehicle-report/:token", vehicleH.PublicReport)
 		v1.DELETE("/vehicle-records/:record_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeleteRecord)
+		v1.PUT("/vehicle-records/:record_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.UpdateRecord)
 		v1.POST("/vehicle-records/:record_id/photos", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.AddPhoto)
 		v1.DELETE("/vehicle-record-photos/:photo_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeletePhoto)
 		v1.DELETE("/vehicle-service-events/:event_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeleteServiceEvent)
+		v1.PUT("/vehicle-service-events/:event_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.UpdateServiceEvent)
 		v1.DELETE("/vehicle-wheel-services/:service_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeleteWheelService)
+		v1.PUT("/vehicle-wheel-services/:service_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.UpdateWheelService)
 		v1.POST("/vehicle-wheel-services/:service_id/photos", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.AddWheelServicePhoto)
 		v1.DELETE("/vehicle-parts/:part_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeletePart)
+		v1.PUT("/vehicle-parts/:part_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.UpdatePart)
 		v1.PUT("/vehicle-photos/:photo_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.UpdateGalleryPhoto)
 		v1.DELETE("/vehicle-photos/:photo_id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("customer:update"), vehicleH.DeleteGalleryPhoto)
 
@@ -301,12 +306,15 @@ func main() {
 			invc.PUT("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.UpdateItem)
 			invc.DELETE("/:id/items/:item_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.RemoveItem)
 			invc.POST("/:id/payments", middleware.PermissionMiddleware("invoice:update"), invoiceH.RecordPayment)
+			invc.PUT("/:id/payments/:payment_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.UpdatePayment)
+			invc.DELETE("/:id/payments/:payment_id", middleware.PermissionMiddleware("invoice:update"), invoiceH.DeletePayment)
 			invc.POST("/:id/payments/:payment_id/proof", middleware.PermissionMiddleware("invoice:update"), invoiceH.UploadPaymentProof)
 			invc.GET("/:id/payments", middleware.PermissionMiddleware("invoice:view"), invoiceH.ListPayments)
 			invc.GET("/:id/returns", middleware.PermissionMiddleware("invoice:view"), returnsH.ListForInvoice)
 		}
 
 		v1.POST("/returns", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("invoice:update"), returnsH.Create)
+		v1.DELETE("/returns/:id", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("invoice:update"), returnsH.Undo)
 
 		v1.GET("/search", middleware.AuthMiddleware(cfg.JWTSecret, pool), searchH.Search)
 
@@ -374,6 +382,7 @@ func main() {
 		{
 			exp.GET("", expenseH.List)
 			exp.POST("", expenseH.Create)
+			exp.PUT("/:id", expenseH.Update)
 			exp.DELETE("/:id", expenseH.Delete)
 		}
 
@@ -411,6 +420,7 @@ func main() {
 		{
 			dep.GET("", middleware.PermissionMiddleware("invoice:view"), depositH.List)
 			dep.POST("", middleware.PermissionMiddleware("invoice:create"), depositH.Create)
+			dep.PUT("/:id", middleware.PermissionMiddleware("invoice:update"), depositH.Update)
 			dep.POST("/:id/apply", middleware.PermissionMiddleware("invoice:update"), depositH.Apply)
 			dep.POST("/:id/refund", middleware.PermissionMiddleware("invoice:update"), depositH.Refund)
 		}

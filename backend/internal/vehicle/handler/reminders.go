@@ -52,6 +52,24 @@ func (h *Handler) DeleteServiceEvent(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+func (h *Handler) UpdateServiceEvent(c *gin.Context) {
+	id, ok := idParam(c, "event_id")
+	if !ok {
+		return
+	}
+	var req dto.CreateServiceEventRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	e, err := h.service.UpdateServiceEvent(c.Request.Context(), branch(c), id, user(c), &req)
+	if err != nil {
+		fail(c, err, "Failed to update service event")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": e})
+}
+
 func (h *Handler) UpdateVehicleIntervals(c *gin.Context) {
 	id, ok := idParam(c, "id")
 	if !ok {

@@ -748,6 +748,47 @@ func (s *Service) CreateServiceEvent(ctx context.Context, branchID, vehicleID, u
 	return &e, nil
 }
 
+// UpdateServiceEvent edits a manually logged (or auto-logged) service event:
+// mileage, name, date and service life.
+func (s *Service) UpdateServiceEvent(ctx context.Context, branchID, eventID, userID int64, req *dto.CreateServiceEventRequest) (*dto.ServiceEventResponse, error) {
+	occurredAt := time.Now()
+	if req.OccurredAt != "" {
+		t, err := time.Parse("2006-01-02", req.OccurredAt)
+		if err != nil {
+			return nil, &domain.AppError{Code: "INVALID_DATE", Message: "occurred_at must be YYYY-MM-DD", Status: 400}
+		}
+		occurredAt = t
+	}
+	lifeKm := req.LifeKm
+	if req.EventType != "tire" {
+		lifeKm = nil
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE vehicle_service_events
+		SET mileage = $1, occurred_at = $2, product_name = NULLIF($3, ''), life_km = $4, life_days = $5, life_months = $6
+		WHERE id = $7 AND branch_id = $8`,
+		req.Mileage, occurredAt, req.ProductName, lifeKm, req.LifeDays, req.LifeMonths, eventID, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("update service event: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrNotFound
+	}
+	var e dto.ServiceEventResponse
+	err = s.pool.QueryRow(ctx, `
+		SELECT e.id, e.event_type, e.mileage, e.occurred_at, e.invoice_id, COALESCE(i.invoice_number,''),
+		       COALESCE(e.product_name,''), COALESCE(u.full_name,'')
+		FROM vehicle_service_events e
+		LEFT JOIN invoices i ON i.id = e.invoice_id
+		LEFT JOIN users u ON u.id = e.created_by
+		WHERE e.id = $1`, eventID).
+		Scan(&e.ID, &e.EventType, &e.Mileage, &e.OccurredAt, &e.InvoiceID, &e.InvoiceNumber, &e.ProductName, &e.CreatedByName)
+	if err != nil {
+		return nil, fmt.Errorf("get updated event: %w", err)
+	}
+	return &e, nil
+}
+
 func (s *Service) DeleteServiceEvent(ctx context.Context, branchID, eventID int64) error {
 	result, err := s.pool.Exec(ctx, `DELETE FROM vehicle_service_events WHERE id = $1 AND branch_id = $2`, eventID, branchID)
 	if err != nil {

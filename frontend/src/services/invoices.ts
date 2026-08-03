@@ -13,6 +13,10 @@ export const invoicesApi = {
     api.post(`/invoices/${id}/void`, { reason }).then(r => r.data.data),
   recordPayment: (id: number, data: RecordPaymentRequest): Promise<Payment> =>
     api.post(`/invoices/${id}/payments`, data).then(r => r.data.data),
+  updatePayment: (id: number, paymentId: number, data: RecordPaymentRequest): Promise<Payment> =>
+    api.put(`/invoices/${id}/payments/${paymentId}`, data).then(r => r.data.data),
+  deletePayment: (id: number, paymentId: number) =>
+    api.delete(`/invoices/${id}/payments/${paymentId}`),
   listPayments: (id: number): Promise<Payment[]> =>
     api.get(`/invoices/${id}/payments`).then(r => r.data.data),
   addItem: (id: number, data: { product_id?: number; item_type: string; description: string; quantity: number; unit_price_usd: number }): Promise<any> =>

@@ -708,6 +708,128 @@ func (s *Service) RecordPayment(ctx context.Context, branchID int64, id int64, u
 	return &p, nil
 }
 
+// UpdatePayment edits a recorded payment and recomputes the invoice's paid
+// state (amount/method/details only — proof photos stay attached).
+func (s *Service) UpdatePayment(ctx context.Context, branchID, invoiceID, paymentID, userID int64, req *dto.RecordPaymentRequest) (*dto.PaymentResponse, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	var totalUSD float64
+	err = tx.QueryRow(ctx, `SELECT status, total_usd FROM invoices WHERE id = $1 AND branch_id = $2 FOR UPDATE`, invoiceID, branchID).
+		Scan(&status, &totalUSD)
+	if err != nil {
+		return nil, domain.ErrNotFound
+	}
+	if status == "voided" {
+		return nil, &domain.AppError{Code: "VOIDED", Message: "Cannot edit payments on a voided invoice", Status: 400}
+	}
+
+	var otherPaid float64
+	err = tx.QueryRow(ctx, `SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = $1 AND id <> $2`, invoiceID, paymentID).Scan(&otherPaid)
+	if err != nil {
+		return nil, fmt.Errorf("sum payments: %w", err)
+	}
+	totalPaid := otherPaid + req.Amount
+	if totalPaid > totalUSD {
+		return nil, &domain.AppError{Code: "PAYMENT_EXCEEDS_TOTAL", Message: "Payment would exceed invoice total", Status: 400}
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+	var p dto.PaymentResponse
+	err = tx.QueryRow(ctx, `
+		UPDATE payments
+		SET amount = $1, method = $2, notes = $3, currency = $4,
+		    tendered_amount = NULLIF($5, 0), exchange_rate = NULLIF($6, 0), reference = NULLIF($7, '')
+		WHERE id = $8 AND invoice_id = $9
+		RETURNING id, invoice_id, amount, method, COALESCE(notes, ''), currency, tendered_amount, COALESCE(reference, ''), created_at`,
+		req.Amount, req.Method, req.Notes, currency, req.TenderedAmount, req.ExchangeRate, req.Reference, paymentID, invoiceID).
+		Scan(&p.ID, &p.InvoiceID, &p.Amount, &p.Method, &p.Notes, &p.Currency, &p.TenderedAmount, &p.Reference, &p.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update payment: %w", err)
+	}
+	if userID > 0 {
+		_ = s.pool.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, userID).Scan(&p.ReceivedByName)
+	}
+
+	paymentStatus, invoiceStatus := "unpaid", "issued"
+	if totalPaid >= totalUSD {
+		paymentStatus, invoiceStatus = "paid", "paid"
+	} else if totalPaid > 0 {
+		paymentStatus = "partial"
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE invoices SET paid_amount = $1, payment_status = $2, status = $3, updated_at = NOW() WHERE id = $4`,
+		totalPaid, paymentStatus, invoiceStatus, invoiceID)
+	if err != nil {
+		return nil, fmt.Errorf("update invoice payment: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+	s.logAudit(ctx, branchID, userID, "payment_updated", "invoice", invoiceID)
+	return &p, nil
+}
+
+// DeletePayment removes a mistaken payment and recomputes the invoice's paid
+// state (the proof photo row goes with it; the stored file is left in place).
+func (s *Service) DeletePayment(ctx context.Context, branchID, invoiceID, paymentID int64) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	var totalUSD float64
+	err = tx.QueryRow(ctx, `SELECT status, total_usd FROM invoices WHERE id = $1 AND branch_id = $2 FOR UPDATE`, invoiceID, branchID).
+		Scan(&status, &totalUSD)
+	if err != nil {
+		return domain.ErrNotFound
+	}
+	if status == "voided" {
+		return &domain.AppError{Code: "VOIDED", Message: "Cannot delete payments on a voided invoice", Status: 400}
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM payments WHERE id = $1 AND invoice_id = $2`, paymentID, invoiceID)
+	if err != nil {
+		return fmt.Errorf("delete payment: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	var totalPaid float64
+	err = tx.QueryRow(ctx, `SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = $1`, invoiceID).Scan(&totalPaid)
+	if err != nil {
+		return fmt.Errorf("sum payments: %w", err)
+	}
+	paymentStatus, invoiceStatus := "unpaid", "issued"
+	if totalPaid >= totalUSD {
+		paymentStatus, invoiceStatus = "paid", "paid"
+	} else if totalPaid > 0 {
+		paymentStatus = "partial"
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE invoices SET paid_amount = $1, payment_status = $2, status = $3, updated_at = NOW() WHERE id = $4`,
+		totalPaid, paymentStatus, invoiceStatus, invoiceID)
+	if err != nil {
+		return fmt.Errorf("update invoice payment: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *Service) GetPayments(ctx context.Context, invoiceID int64) ([]dto.PaymentResponse, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, p.invoice_id, p.amount, p.method, COALESCE(p.currency, 'USD'), p.tendered_amount,

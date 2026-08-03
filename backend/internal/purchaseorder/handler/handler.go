@@ -59,6 +59,34 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"data": po})
 }
 
+func (h *Handler) Update(c *gin.Context) {
+	branchID, _ := c.Get("branch_id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": "Invalid purchase order id"}})
+		return
+	}
+	var req dto.CreatePORequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	po, err := h.service.Update(c.Request.Context(), branchID.(int64), id, &req)
+	if err != nil {
+		if appErr, ok := err.(*domain.AppError); ok {
+			c.JSON(appErr.Status, gin.H{"error": gin.H{"code": appErr.Code, "message": appErr.Message}})
+			return
+		}
+		if err == domain.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "Purchase order or supplier not found"}})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": po})
+}
+
 func (h *Handler) List(c *gin.Context) {
 	list, err := h.service.List(c.Request.Context(), branch(c))
 	if err != nil {

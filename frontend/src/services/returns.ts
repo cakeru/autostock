@@ -35,4 +35,5 @@ export interface CreateReturnRequest {
 export const returnsApi = {
   forInvoice: (invoiceId: number): Promise<InvoiceReturns> => api.get(`/invoices/${invoiceId}/returns`).then(r => r.data.data),
   create: (data: CreateReturnRequest): Promise<Return> => api.post('/returns', data).then(r => r.data.data),
+  remove: (id: number) => api.delete(`/returns/${id}`),
 }

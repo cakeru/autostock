@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { Pencil, X } from 'lucide-react'
 import { useInvoices } from '@/hooks/useInvoices'
-import { useCustomerDeposits, useCreateDeposit, useApplyDeposit, useRefundDeposit } from '@/hooks/useDeposits'
+import { useCustomerDeposits, useCreateDeposit, useUpdateDeposit, useApplyDeposit, useRefundDeposit } from '@/hooks/useDeposits'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -10,11 +11,15 @@ export function CustomerDeposits({ customerId }: { customerId: number }) {
   const { data: deposits } = useCustomerDeposits(customerId, 'held')
   const { data: invData } = useInvoices({ customer_id: customerId, per_page: 50 })
   const create = useCreateDeposit()
+  const update = useUpdateDeposit()
   const apply = useApplyDeposit()
   const refund = useRefundDeposit()
 
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editNote, setEditNote] = useState('')
   const [applyingId, setApplyingId] = useState<number | null>(null)
   const [applyInvoice, setApplyInvoice] = useState('')
 
@@ -32,6 +37,18 @@ export function CustomerDeposits({ customerId }: { customerId: number }) {
     apply.mutate({ id, invoiceId: parseInt(applyInvoice) }, { onSuccess: () => { setApplyingId(null); setApplyInvoice('') } })
   }
 
+  const startEdit = (d: { id: number; amount: number; note?: string }) => {
+    setEditingId(d.id)
+    setEditAmount(String(d.amount))
+    setEditNote(d.note || '')
+  }
+  const saveEdit = () => {
+    const a = parseFloat(editAmount)
+    if (!editingId || isNaN(a) || a <= 0) return
+    update.mutate({ id: editingId, data: { customer_id: customerId, amount: a, note: editNote.trim() || undefined } },
+      { onSuccess: () => setEditingId(null) })
+  }
+
   return (
     <div className="rounded-lg bg-card p-5 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
@@ -45,20 +62,30 @@ export function CustomerDeposits({ customerId }: { customerId: number }) {
         <div className="space-y-2">
           {held.map((d) => (
             <div key={d.id} className="rounded-md border p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="font-medium tabular-nums">{formatUSD(d.amount)}</span>
-                  {d.note && <span className="ml-2 text-xs text-muted-foreground">{d.note}</span>}
+              {editingId === d.id ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input type="number" step="0.01" min="0" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="w-28" />
+                  <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Note" className="flex-1 min-w-[8rem]" />
+                  <Button size="sm" onClick={saveEdit} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save'}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}><X className="h-4 w-4" /></Button>
                 </div>
-                <div className="flex flex-shrink-0 gap-1">
-                  <Button variant="outline" size="sm" disabled={unpaid.length === 0}
-                    title={unpaid.length === 0 ? 'No unpaid invoices to apply to' : ''}
-                    onClick={() => { setApplyingId(applyingId === d.id ? null : d.id); setApplyInvoice('') }}>
-                    Apply
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive" disabled={refund.isPending} onClick={() => refund.mutate(d.id)}>Refund</Button>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-medium tabular-nums">{formatUSD(d.amount)}</span>
+                    {d.note && <span className="ml-2 text-xs text-muted-foreground">{d.note}</span>}
+                  </div>
+                  <div className="flex flex-shrink-0 gap-1">
+                    <button onClick={() => startEdit(d)} title="Edit deposit" className="text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                    <Button variant="outline" size="sm" disabled={unpaid.length === 0}
+                      title={unpaid.length === 0 ? 'No unpaid invoices to apply to' : ''}
+                      onClick={() => { setApplyingId(applyingId === d.id ? null : d.id); setApplyInvoice('') }}>
+                      Apply
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-destructive" disabled={refund.isPending} onClick={() => refund.mutate(d.id)}>Refund</Button>
+                  </div>
                 </div>
-              </div>
+              )}
               {applyingId === d.id && (
                 <div className="mt-2 flex items-center gap-2">
                   <Select value={applyInvoice} onChange={(e) => setApplyInvoice(e.target.value)} className="flex-1">

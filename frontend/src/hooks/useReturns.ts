@@ -23,3 +23,17 @@ export function useCreateReturn() {
     },
   })
 }
+
+export function useUndoReturn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, invoiceId }: { id: number; invoiceId: number }) => returnsApi.remove(id),
+    onSuccess: (_res, { invoiceId }) => {
+      qc.invalidateQueries({ queryKey: ['invoice', invoiceId] })
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['deposits'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+      toast.success('Return undone')
+    },
+  })
+}

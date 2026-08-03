@@ -210,6 +210,20 @@ func (s *Service) CreateRecord(ctx context.Context, branchID, vehicleID, userID 
 	return s.getRecord(ctx, branchID, id)
 }
 
+// UpdateRecord edits a record's note and mileage (invoice/job links stay).
+func (s *Service) UpdateRecord(ctx context.Context, branchID, id int64, req *dto.CreateRecordRequest) (*dto.RecordResponse, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE vehicle_records SET note = NULLIF($1, ''), mileage = $2 WHERE id = $3 AND branch_id = $4`,
+		req.Note, req.Mileage, id, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("update record: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getRecord(ctx, branchID, id)
+}
+
 // DeleteRecord removes a record and returns the photo URLs it held, so the
 // caller can best-effort clean them out of storage (cascade handles the DB rows).
 func (s *Service) DeleteRecord(ctx context.Context, branchID, id int64) ([]string, error) {

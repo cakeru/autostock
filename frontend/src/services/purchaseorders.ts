@@ -17,6 +17,11 @@ export const purchaseOrdersApi = {
     return res.data.data
   },
 
+  update: async (id: number, data: CreatePORequest): Promise<POListItem> => {
+    const res = await api.put(`/purchase-orders/${id}`, data)
+    return res.data.data
+  },
+
   addItem: async (poId: number, data: AddPOItemRequest): Promise<POItem> => {
     const res = await api.post(`/purchase-orders/${poId}/items`, data)
     return res.data.data

@@ -6,10 +6,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Printer, Receipt, Undo2, Send, Pencil, Trash2, X, FileImage } from 'lucide-react'
 import { useSendToTelegram } from '@/hooks/useSendToTelegram'
-import { useInvoice, useUpdateInvoice, useVoidInvoice, useRecordPayment, useUploadPaymentProof, useUpdateInvoiceItem, useAddInvoiceItem, useRemoveInvoiceItem } from '@/hooks/useInvoices'
+import { useInvoice, useUpdateInvoice, useVoidInvoice, useRecordPayment, useUpdatePayment, useDeletePayment, useUploadPaymentProof, useUpdateInvoiceItem, useAddInvoiceItem, useRemoveInvoiceItem } from '@/hooks/useInvoices'
 import { useCustomerVehicles } from '@/hooks/useCustomers'
 import { useProducts } from '@/hooks/useProducts'
-import { useInvoiceReturns } from '@/hooks/useReturns'
+import { useInvoiceReturns, useUndoReturn } from '@/hooks/useReturns'
 import { ReturnDialog } from '@/components/invoice/ReturnDialog'
 import { useSettings } from '@/hooks/useSettings'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import { Select } from '@/components/ui/select'
 import { InvoiceStatusBadge } from '@/components/invoice/StatusBadge'
 import { PrintReceipt, type PrintFormat } from '@/components/invoice/PrintReceipt'
 import { imageSrc } from '@/utils/imageUrl'
-import type { RecordPaymentRequest, UpdateInvoiceRequest, UpdateInvoiceItemRequest, InvoiceDetail } from '@/types/invoice'
+import type { RecordPaymentRequest, UpdateInvoiceRequest, UpdateInvoiceItemRequest, InvoiceDetail, Payment } from '@/types/invoice'
 import type { Product } from '@/types/product'
 import { parseArraySetting, DEFAULT_PAYMENT_METHODS } from '@/lib/packages'
 
@@ -33,6 +33,8 @@ export function InvoiceDetail() {
   const updateMutation = useUpdateInvoice()
   const voidMutation = useVoidInvoice()
   const recordPaymentMutation = useRecordPayment()
+  const updatePaymentMutation = useUpdatePayment()
+  const deletePaymentMutation = useDeletePayment()
   const uploadProofMutation = useUploadPaymentProof()
   const updateItemMutation = useUpdateInvoiceItem()
   const addItemMutation = useAddInvoiceItem()
@@ -41,11 +43,13 @@ export function InvoiceDetail() {
   const [voidReason, setVoidReason] = useState('')
   const [showVoid, setShowVoid] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   const [showReturn, setShowReturn] = useState(false)
   const [showVehicleEdit, setShowVehicleEdit] = useState(false)
   const [showItemsEdit, setShowItemsEdit] = useState(false)
   const [lightbox, setLightbox] = useState('')
   const { data: returnsData } = useInvoiceReturns(invoiceId)
+  const undoReturn = useUndoReturn()
   const [printFormat, setPrintFormat] = useState<PrintFormat | null>(null)
   const captureRef = useRef<HTMLDivElement>(null)
   const { send: sendTelegram, sending } = useSendToTelegram()
@@ -88,6 +92,24 @@ export function InvoiceDetail() {
         },
       }
     )
+  }
+
+  const handleUpdatePayment = (data: RecordPaymentRequest) => {
+    if (!editingPayment) return
+    updatePaymentMutation.mutate(
+      { id: invoiceId, paymentId: editingPayment.id, data },
+      { onSuccess: () => { setEditingPayment(null); setShowPayment(false) } }
+    )
+  }
+
+  const handleDeletePayment = (p: Payment) => {
+    if (!window.confirm(`Delete the $${p.amount.toFixed(2)} ${p.method} payment? The invoice's paid status will be recalculated.`)) return
+    deletePaymentMutation.mutate({ id: invoiceId, paymentId: p.id })
+  }
+
+  const handleUndoReturn = (r: { id: number; refund_amount: number; refund_method: string }) => {
+    if (!window.confirm(`Undo this ${r.refund_method === 'store_credit' ? 'store credit' : 'refund'} of $${r.refund_amount.toFixed(2)}? The restocked items go back out of inventory and the credit is removed.`)) return
+    undoReturn.mutate({ id: r.id, invoiceId })
   }
 
   const handleVoid = () => {
@@ -200,7 +222,15 @@ export function InvoiceDetail() {
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(p.created_at)}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(p.created_at)}</span>
+                        <button onClick={() => { setEditingPayment(p); setShowPayment(true) }} title="Edit payment" className="text-muted-foreground hover:text-foreground">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => handleDeletePayment(p)} title="Delete payment" className="text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -227,7 +257,12 @@ export function InvoiceDetail() {
                   <div key={r.id} className="rounded-md border p-2.5 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium tabular-nums text-destructive">−${r.refund_amount.toFixed(2)}</span>
-                      <span className="text-xs text-muted-foreground">{r.refund_method === 'store_credit' ? 'Store credit' : 'Cash refund'} · {formatDateTime(r.created_at)}</span>
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {r.refund_method === 'store_credit' ? 'Store credit' : 'Cash refund'} · {formatDateTime(r.created_at)}
+                        <button onClick={() => handleUndoReturn(r)} title="Undo return" className="text-muted-foreground hover:text-destructive">
+                          <Undo2 className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{r.items.map((it) => `${it.quantity}× ${it.description}`).join(', ')}</p>
                     {r.reason && <p className="text-xs text-muted-foreground">Reason: {r.reason}</p>}
@@ -307,15 +342,16 @@ export function InvoiceDetail() {
         </ConfirmDialog>
       )}
 
-      {showPayment && (
+      {(showPayment || editingPayment) && (
         <RecordPaymentDialog
           invoiceId={invoiceId}
           invoiceNumber={invoice.invoice_number}
           owed={owed}
           rate={settings?.exchange_rate_usd_khr || 4050}
           methods={paymentMethods}
-          onClose={() => setShowPayment(false)}
-          onConfirm={handleRecordPayment}
+          payment={editingPayment || undefined}
+          onClose={() => { setShowPayment(false); setEditingPayment(null) }}
+          onConfirm={editingPayment ? handleUpdatePayment : handleRecordPayment}
           loading={recordPaymentMutation.isPending || uploadProofMutation.isPending}
         />
       )}
@@ -416,7 +452,7 @@ function EditVehicleDialog({ invoice, unitLabel, onClose, onSave, loading }: {
   )
 }
 
-function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, onClose, onConfirm, loading }: {
+function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, onClose, onConfirm, loading, payment }: {
   invoiceId: number
   invoiceNumber: string
   owed: number
@@ -425,29 +461,31 @@ function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, on
   onClose: () => void
   onConfirm: (data: RecordPaymentRequest, proof?: File) => void
   loading: boolean
+  payment?: Payment
 }) {
-  const [currency, setCurrency] = useState<'USD' | 'KHR'>('USD')
-  const [amount, setAmount] = useState(owed > 0 ? owed.toFixed(2) : '') // USD entry
-  const [riel, setRiel] = useState(owed > 0 ? String(Math.round(owed * rate)) : '') // KHR entry
-  const [method, setMethod] = useState(methods[0] || 'cash')
-  const [notes, setNotes] = useState('')
-  const [reference, setReference] = useState('')
+  const editing = !!payment
+  const [currency, setCurrency] = useState<'USD' | 'KHR'>(payment?.currency === 'KHR' ? 'KHR' : 'USD')
+  const [amount, setAmount] = useState(payment && payment.currency !== 'KHR' ? payment.amount.toFixed(2) : owed > 0 ? owed.toFixed(2) : '') // USD entry
+  const [riel, setRiel] = useState(payment && payment.currency === 'KHR' ? String(Math.round(payment.tendered_amount || payment.amount * rate)) : owed > 0 ? String(Math.round(owed * rate)) : '') // KHR entry
+  const [method, setMethod] = useState(payment?.method || methods[0] || 'cash')
+  const [notes, setNotes] = useState(payment?.notes || '')
+  const [reference, setReference] = useState(payment?.reference || '')
   const [proof, setProof] = useState<File | null>(null)
   const proofRef = useRef<HTMLInputElement>(null)
   const isCash = method === 'cash'
 
   // Convert whatever was tendered to USD; record at most the balance owed.
   const tenderedUSD = currency === 'USD' ? (parseFloat(amount) || 0) : (parseFloat(riel) || 0) / rate
-  const recordAmount = Math.min(Math.round(tenderedUSD * 100) / 100, owed)
-  const changeUSD = Math.max(0, Math.round((tenderedUSD - owed) * 100) / 100)
+  const recordAmount = editing ? Math.round(tenderedUSD * 100) / 100 : Math.min(Math.round(tenderedUSD * 100) / 100, owed)
+  const changeUSD = editing ? 0 : Math.max(0, Math.round((tenderedUSD - owed) * 100) / 100)
   const changeRiel = Math.round(changeUSD * rate)
-  const over = !isCash && tenderedUSD > owed + 0.005 // only cash can be tendered over
+  const over = !editing && !isCash && tenderedUSD > owed + 0.005 // only cash can be tendered over
 
   const submit = () => {
     if (recordAmount <= 0) return
     onConfirm({
       amount: recordAmount,
-      method,
+      method: method || undefined,
       notes: notes || undefined,
       currency,
       tendered_amount: currency === 'USD' ? (parseFloat(amount) || 0) : (parseFloat(riel) || 0),
@@ -459,8 +497,12 @@ function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-card rounded-lg p-5 shadow-lg w-full max-w-sm mx-4">
-        <p className="text-sm font-semibold mb-1">Record Payment — {invoiceNumber}</p>
-        <p className="text-xs text-muted-foreground mb-3">Balance owed: <span className="font-medium tabular-nums">${owed.toFixed(2)}</span> · ≈ ៛{Math.round(owed * rate).toLocaleString()}</p>
+        <p className="text-sm font-semibold mb-1">{editing ? 'Edit Payment' : 'Record Payment'} — {invoiceNumber}</p>
+        {editing ? (
+          <p className="text-xs text-muted-foreground mb-3">Changing this payment recalculates the invoice's paid status.</p>
+        ) : (
+          <p className="text-xs text-muted-foreground mb-3">Balance owed: <span className="font-medium tabular-nums">${owed.toFixed(2)}</span> · ≈ ៛{Math.round(owed * rate).toLocaleString()}</p>
+        )}
 
         <div className="mb-2 flex gap-1 rounded-md border p-0.5">
           {(['USD', 'KHR'] as const).map((c) => (
@@ -496,7 +538,7 @@ function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, on
               ))}
             </Select>
           </div>
-          {method !== 'cash' && (
+          {!editing && method !== 'cash' && (
             <>
               <div className="space-y-1">
                 <label className="text-xs font-medium">Trx ID (ABA) — optional</label>
@@ -526,7 +568,7 @@ function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, on
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={loading || recordAmount <= 0 || over || !method}>
-            {loading ? 'Recording...' : 'Record Payment'}
+            {loading ? 'Saving...' : editing ? 'Save' : 'Record Payment'}
           </Button>
         </div>
       </div>

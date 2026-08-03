@@ -1801,3 +1801,29 @@ The API uses URL-based versioning:
 - Future versions: `/api/v2`, `/api/v3`, etc.
 
 When breaking changes are introduced, a new version will be created. Old versions will be supported for at least 6 months.
+
+## Editing & undo endpoints
+
+Records that used to be create-only now support editing/undo:
+
+- `PUT /api/v1/invoices/:id/payments/:payment_id` — edit a payment (amount,
+  method, reference, notes); the invoice's paid status is recalculated.
+- `DELETE /api/v1/invoices/:id/payments/:payment_id` — remove a mistaken
+  payment and recalculate the paid status.
+- `PUT /api/v1/vehicle-records/:record_id` — edit a vehicle record's note/mileage.
+- `PUT /api/v1/vehicle-service-events/:event_id` — edit an oil/tire/service
+  event's mileage, date, name and service life.
+- `PUT /api/v1/vehicle-parts/:part_id` — edit a replaced-part entry.
+- `PUT /api/v1/vehicle-wheel-services/:service_id` — edit a wheel snapshot
+  (date, mileage, notes) and replace its corners.
+- `PUT /api/v1/expenses/:id` — edit an expense (category, amount, date, note).
+- `DELETE /api/v1/returns/:id` — undo a return: removes the store-credit
+  deposit, takes the restocked items back out of inventory, and restores the
+  invoice's refund state. Refused if the returned stock has already been sold
+  again (the FIFO ledger can't be unwound).
+- `PUT /api/v1/purchase-orders/:id` — edit a **draft** order's supplier/notes.
+- `PUT /api/v1/deposits/:id` — edit a **held** deposit's amount/note.
+
+Product stock on the product form is now editable too: saving a changed stock
+number on an existing product calls `POST /api/v1/products/:id/adjust` with
+reason `Manual stock correction`, so the stock-movement ledger stays intact.

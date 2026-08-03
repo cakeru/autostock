@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,9 @@ import { TableCard, Th } from '@/components/ui/table'
 import { formatUSD } from '@/utils/currency'
 import {
   usePurchaseOrder, useAddPOItem, useRemovePOItem,
-  usePlacePO, useCancelPO, useReceivePO,
+  usePlacePO, useCancelPO, useReceivePO, useUpdatePurchaseOrder,
 } from '@/hooks/usePurchaseOrders'
+import { useSuppliers } from '@/hooks/useSuppliers'
 import { useProducts } from '@/hooks/useProducts'
 import type { POStatus } from '@/types/purchaseorder'
 
@@ -35,7 +36,12 @@ export function PurchaseOrderDetail() {
   const placeMutation = usePlacePO()
   const cancelMutation = useCancelPO()
   const receiveMutation = useReceivePO()
+  const updateMutation = useUpdatePurchaseOrder(poId)
+  const { data: suppliers } = useSuppliers()
 
+  const [editingHeader, setEditingHeader] = useState(false)
+  const [supplierId, setSupplierId] = useState('')
+  const [notes, setNotes] = useState('')
   const [productFilter, setProductFilter] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('')
   const [qtyOrdered, setQtyOrdered] = useState('1')
@@ -65,6 +71,18 @@ export function PurchaseOrderDetail() {
     })
   }
 
+  const startEditHeader = () => {
+    setSupplierId(String(po.supplier_id))
+    setNotes(po.notes || '')
+    setEditingHeader(true)
+  }
+
+  const saveHeader = () => {
+    const sid = parseInt(supplierId)
+    if (!sid) return
+    updateMutation.mutate({ supplier_id: sid, notes: notes.trim() || undefined }, { onSuccess: () => setEditingHeader(false) })
+  }
+
   const handleReceive = () => {
     const items = po.items
       .map((it) => {
@@ -89,11 +107,37 @@ export function PurchaseOrderDetail() {
         badges={<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[po.status]}`}>{po.status}</span>}
         actions={
           <>
+            {isDraft && !editingHeader && <Button variant="outline" size="sm" onClick={startEditHeader}><Pencil className="h-3.5 w-3.5" /> Edit</Button>}
             {isDraft && <Button size="sm" onClick={() => placeMutation.mutate(poId)} disabled={po.item_count === 0 || placeMutation.isPending}>Place Order</Button>}
             {canCancel && <Button variant="outline" size="sm" onClick={() => setConfirmCancel(true)}>Cancel</Button>}
           </>
         }
       />
+
+      {isDraft && editingHeader && (
+        <div className="rounded-lg bg-card p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold">Edit order</p>
+            <button onClick={() => setEditingHeader(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-56 space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Supplier</label>
+              <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Select...</option>
+                {(suppliers || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[10rem] space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Notes</label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+            </div>
+            <Button size="sm" onClick={saveHeader} disabled={!supplierId || updateMutation.isPending}>
+              {updateMutation.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {isDraft && (
         <div className="rounded-lg bg-card p-4 shadow-sm">

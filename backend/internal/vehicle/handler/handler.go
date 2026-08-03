@@ -143,6 +143,24 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+func (h *Handler) UpdateRecord(c *gin.Context) {
+	id, ok := idParam(c, "record_id")
+	if !ok {
+		return
+	}
+	var req dto.CreateRecordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	rec, err := h.service.UpdateRecord(c.Request.Context(), branch(c), id, &req)
+	if err != nil {
+		fail(c, err, "Failed to update record")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": rec})
+}
+
 // processUploadedPhoto reads the "photo" form field, resizes/orients/encodes it
 // to JPEG, stores it under keyPrefix, and returns the stored URL. On any failure
 // it writes the error response itself and returns ok=false. Shared by the

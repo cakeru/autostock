@@ -62,6 +62,24 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 	return s.getByID(ctx, branchID, id)
 }
 
+// Update edits a held deposit's amount/note (applied/refunded deposits are
+// settled — correct those by adjusting the invoice instead).
+func (s *Service) Update(ctx context.Context, branchID, id int64, req *dto.CreateDepositRequest) (*dto.DepositResponse, error) {
+	d, err := s.getByID(ctx, branchID, id)
+	if err != nil {
+		return nil, err
+	}
+	if d.Status != "held" {
+		return nil, &domain.AppError{Code: "DEPOSIT_SETTLED", Message: "Only held deposits can be edited", Status: 400}
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE deposits SET customer_id = $1, amount = $2, note = NULLIF($3, '') WHERE id = $4 AND branch_id = $5`,
+		req.CustomerID, req.Amount, req.Note, id, branchID); err != nil {
+		return nil, fmt.Errorf("update deposit: %w", err)
+	}
+	return s.getByID(ctx, branchID, id)
+}
+
 func (s *Service) List(ctx context.Context, branchID, customerID int64, status string) ([]dto.DepositResponse, error) {
 	var cust *int64
 	if customerID > 0 {

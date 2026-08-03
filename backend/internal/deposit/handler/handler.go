@@ -56,6 +56,17 @@ func (h *Handler) Create(c *gin.Context) {
 	respond(c, err, http.StatusCreated, d)
 }
 
+func (h *Handler) Update(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var req dto.CreateDepositRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	d, err := h.service.Update(c.Request.Context(), branch(c), id, &req)
+	respond(c, err, http.StatusOK, d)
+}
+
 func (h *Handler) Apply(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var req dto.ApplyDepositRequest

@@ -224,6 +224,70 @@ func (s *Service) DeleteWheelService(ctx context.Context, branchID, id int64) ([
 	return urls, nil
 }
 
+// UpdateWheelService edits a snapshot's header (date, mileage, notes) and
+// replaces its corners wholesale (delete + reinsert keeps positions unique).
+func (s *Service) UpdateWheelService(ctx context.Context, branchID, id int64, req *dto.CreateWheelServiceRequest) (*dto.WheelServiceResponse, error) {
+	performedAt := time.Now()
+	if req.PerformedAt != "" {
+		parsed, err := time.Parse("2006-01-02", req.PerformedAt)
+		if err != nil {
+			return nil, &domain.AppError{Code: "INVALID_DATE", Message: "performed_at must be YYYY-MM-DD", Status: 400}
+		}
+		performedAt = parsed
+	}
+
+	seen := map[string]bool{}
+	for _, c := range req.Corners {
+		if !validPositions[c.Position] {
+			return nil, &domain.AppError{Code: "INVALID_POSITION", Message: fmt.Sprintf("invalid wheel position %q", c.Position), Status: 400}
+		}
+		if seen[c.Position] {
+			return nil, &domain.AppError{Code: "DUPLICATE_POSITION", Message: fmt.Sprintf("duplicate wheel position %q", c.Position), Status: 400}
+		}
+		seen[c.Position] = true
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE vehicle_wheel_services
+		SET performed_at = $1, mileage = $2, notes = NULLIF($3, '')
+		WHERE id = $4 AND branch_id = $5`,
+		performedAt, req.Mileage, req.Notes, id, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("update wheel service: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM wheel_service_corners WHERE wheel_service_id = $1`, id); err != nil {
+		return nil, fmt.Errorf("clear corners: %w", err)
+	}
+	for _, c := range req.Corners {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO wheel_service_corners
+			  (wheel_service_id, position, tire_product_id, tire_brand, tire_size, tire_dot,
+			   tread_mm, tread_before_mm, pressure, camber_before, camber_after, caster_before, caster_after,
+			   toe_before, toe_after, wear_note)
+			VALUES ($1, $2, $3, NULLIF($4,''), NULLIF($5,''), NULLIF($6,''),
+			   $7, $8, $9, NULLIF($10,''), NULLIF($11,''), NULLIF($12,''), NULLIF($13,''),
+			   NULLIF($14,''), NULLIF($15,''), NULLIF($16,''))`,
+			id, c.Position, c.TireProductID, c.TireBrand, c.TireSize, c.TireDOT,
+			c.TreadMM, c.TreadBeforeMM, c.Pressure, c.CamberBefore, c.CamberAfter, c.CasterBefore, c.CasterAfter,
+			c.ToeBefore, c.ToeAfter, c.WearNote); err != nil {
+			return nil, fmt.Errorf("insert corner %s: %w", c.Position, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit wheel service: %w", err)
+	}
+	return s.getWheelService(ctx, branchID, id)
+}
+
 func (s *Service) AddWheelServicePhoto(ctx context.Context, branchID, wheelServiceID int64, url string) (*dto.PhotoResponse, error) {
 	var exists bool
 	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM vehicle_wheel_services WHERE id = $1 AND branch_id = $2)`,
@@ -345,4 +409,42 @@ func (s *Service) DeletePart(ctx context.Context, branchID, id int64) error {
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+// UpdatePart edits a replaced-part entry (name, position, date, mileage, notes).
+func (s *Service) UpdatePart(ctx context.Context, branchID, id int64, req *dto.CreatePartRequest) (*dto.PartResponse, error) {
+	replacedAt := time.Now()
+	if req.ReplacedAt != "" {
+		parsed, err := time.Parse("2006-01-02", req.ReplacedAt)
+		if err != nil {
+			return nil, &domain.AppError{Code: "INVALID_DATE", Message: "replaced_at must be YYYY-MM-DD", Status: 400}
+		}
+		replacedAt = parsed
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE vehicle_parts
+		SET part_name = $1, part_key = NULLIF($2,''), position = NULLIF($3,''),
+		    replaced_at = $4, mileage = $5, notes = NULLIF($6,'')
+		WHERE id = $7 AND branch_id = $8`,
+		req.PartName, req.PartKey, req.Position, replacedAt, req.Mileage, req.Notes, id, branchID)
+	if err != nil {
+		return nil, fmt.Errorf("update part: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrNotFound
+	}
+	var vehicleID int64
+	if err := s.pool.QueryRow(ctx, `SELECT vehicle_id FROM vehicle_parts WHERE id = $1`, id).Scan(&vehicleID); err != nil {
+		return nil, fmt.Errorf("get part vehicle: %w", err)
+	}
+	parts, err := s.ListParts(ctx, branchID, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range parts {
+		if parts[i].ID == id {
+			return &parts[i], nil
+		}
+	}
+	return nil, domain.ErrNotFound
 }

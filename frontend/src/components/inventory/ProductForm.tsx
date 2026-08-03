@@ -254,8 +254,8 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Stock Quantity</Label>
-          <Input value={stockQty} onChange={(e) => setStockQty(e.target.value)} type="number" min="0" step="any" disabled={!!initial} className={initial ? 'opacity-60' : ''} />
-          {initial && <p className="text-[10px] text-muted-foreground">Use "Receive" or "Adjust" to change stock</p>}
+          <Input value={stockQty} onChange={(e) => setStockQty(e.target.value)} type="number" min="0" step="any" />
+          {initial && <p className="text-[10px] text-muted-foreground">Changing stock here records a stock adjustment (with reason) in the ledger.</p>}
         </div>
         <div className="space-y-1.5">
           <Label>Min Stock Alert</Label>

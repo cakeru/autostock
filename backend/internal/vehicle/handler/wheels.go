@@ -55,6 +55,24 @@ func (h *Handler) DeleteWheelService(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+func (h *Handler) UpdateWheelService(c *gin.Context) {
+	id, ok := idParam(c, "service_id")
+	if !ok {
+		return
+	}
+	var req dto.CreateWheelServiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	svc, err := h.service.UpdateWheelService(c.Request.Context(), branch(c), id, &req)
+	if err != nil {
+		fail(c, err, "Failed to update wheel service")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": svc})
+}
+
 func (h *Handler) AddWheelServicePhoto(c *gin.Context) {
 	serviceID, ok := idParam(c, "service_id")
 	if !ok {
@@ -131,6 +149,24 @@ func (h *Handler) DeletePart(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
+}
+
+func (h *Handler) UpdatePart(c *gin.Context) {
+	id, ok := idParam(c, "part_id")
+	if !ok {
+		return
+	}
+	var req dto.CreatePartRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
+		return
+	}
+	part, err := h.service.UpdatePart(c.Request.Context(), branch(c), id, &req)
+	if err != nil {
+		fail(c, err, "Failed to update part")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": part})
 }
 
 // ---------------------------------------------------------------------------

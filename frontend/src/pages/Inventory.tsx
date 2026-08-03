@@ -68,9 +68,19 @@ export function Inventory() {
 
   const handleSubmit: ProductFormProps['onSubmit'] = async (formData, image) => {
     try {
-      const product = editing
-        ? await updateMutation.mutateAsync({ id: editing.id, data: formData as any })
-        : await createMutation.mutateAsync(formData)
+      let product
+      if (editing) {
+        // Stock changes go through the adjust endpoint so the stock-movement
+        // ledger (and FIFO batches) stay consistent.
+        const { stock_quantity, ...rest } = formData as any
+        product = await updateMutation.mutateAsync({ id: editing.id, data: rest })
+        const delta = (parseFloat(stock_quantity) || 0) - (editing.stock_quantity || 0)
+        if (Math.abs(delta) > 0.0001) {
+          await adjustMutation.mutateAsync({ id: editing.id, data: { quantity_change: delta, reason: 'Manual stock correction' } })
+        }
+      } else {
+        product = await createMutation.mutateAsync(formData)
+      }
       if (image?.file) {
         await uploadImage.mutateAsync({ id: product.id, file: image.file })
       } else if (image?.remove) {

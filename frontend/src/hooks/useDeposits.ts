@@ -25,6 +25,15 @@ export function useCreateDeposit() {
   })
 }
 
+export function useUpdateDeposit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { customer_id: number; amount: number; note?: string } }) =>
+      depositsApi.update(id, data),
+    onSuccess: () => { invalidate(qc); toast.success('Deposit updated') },
+  })
+}
+
 export function useApplyDeposit() {
   const qc = useQueryClient()
   return useMutation({
