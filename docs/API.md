@@ -1285,6 +1285,13 @@ GET /api/v1/products?type=tire&stock_quantity_lt=10&is_active=true
       "product_id": 10,
       "quantity": 1,
       "unit_price_usd": 15.00
+    },
+    {
+      "item_type": "labor",
+      "description": "Wheel balancing",
+      "quantity": 2,
+      "unit_price_usd": 10.00,
+      "vehicle_event_type": "service"
     }
   ],
   "discount": 0.00,
@@ -1294,6 +1301,10 @@ GET /api/v1/products?type=tire&stock_quantity_lt=10&is_active=true
   "payment_status": "paid"
 }
 ```
+
+Labor lines may include `"vehicle_event_type": "service"` to auto-log the work
+on the invoice's vehicle record (visible in the vehicle timeline). Requires a
+`vehicle_id` on the invoice; the service jobs' lines carry the same flag.
 
 **Response (201 Created):**
 ```json

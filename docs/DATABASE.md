@@ -440,8 +440,9 @@ CREATE TABLE invoice_items (
     product_id BIGINT REFERENCES products(id) ON DELETE SET NULL, -- NULL for custom items
     
     -- Item details
-    item_type VARCHAR(50) NOT NULL CHECK (item_type IN ('product', 'labor', 'custom')),
+    item_type VARCHAR(50) NOT NULL CHECK (item_type IN ('product', 'labor', 'custom', 'fee')),
     description VARCHAR(500) NOT NULL,
+    vehicle_event_type TEXT, -- 'service' = auto-log this labor line on the vehicle record
     
     -- Quantity and pricing
     quantity DECIMAL(10, 2) NOT NULL DEFAULT 1,
@@ -461,6 +462,12 @@ CREATE TABLE invoice_items (
 CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id);
 CREATE INDEX idx_invoice_items_product_id ON invoice_items(product_id);
 ```
+
+`vehicle_event_type` (migration 000046) marks labor lines whose work should be
+recorded automatically on the invoice's vehicle (e.g. `'service'` for wheel
+balancing/alignment). The backend logs one `vehicle_service_events` row per
+distinct marked line; the same flag exists on `service_job_items` so job →
+invoice conversion carries it.
 
 ### Audit & Activity Tables
 
