@@ -278,11 +278,9 @@ export function InvoiceDetail() {
           <div className="bg-card rounded-lg p-5 shadow-sm space-y-1.5">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">Customer</p>
-              {invoice.customer_id && (
-                <Button size="sm" variant="ghost" onClick={() => setShowVehicleEdit(true)} className="h-7 gap-1 px-2 text-xs -mr-1">
-                  <Pencil className="h-3 w-3" /> Edit
-                </Button>
-              )}
+              <Button size="sm" variant="ghost" onClick={() => setShowVehicleEdit(true)} className="h-7 gap-1 px-2 text-xs -mr-1">
+                <Pencil className="h-3 w-3" /> Edit
+              </Button>
             </div>
             <p className="text-sm font-medium">{invoice.customer_name || 'Walk-in'}</p>
             {invoice.customer_phone && <p className="text-sm">{invoice.customer_phone}</p>}
