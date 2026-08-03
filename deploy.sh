@@ -6,6 +6,9 @@
 # The repo is fetched over HTTPS so a PUBLIC repo needs no credentials.
 set -e
 cd /repo
+# The updater runs as root while the checkout may be owned by the server's
+# deploy user; allow git to operate on it regardless of ownership.
+git config --global safe.directory /repo
 REPO_URL="${REPO_URL:-https://github.com/cakeru/autostock.git}"
 echo "[deploy] fetching ${REPO_URL}"
 git fetch "$REPO_URL" main
