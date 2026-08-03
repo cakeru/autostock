@@ -203,7 +203,7 @@ func (s *Service) ListVehicles(ctx context.Context, customerID int64) ([]models.
 	for rows.Next() {
 		var v models.Vehicle
 		if err := rows.Scan(&v.ID, &v.CustomerID, &v.PlateNumber, &v.Make, &v.Model,
-			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.Notes, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.DistanceUnit, &v.Notes, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan vehicle: %w", err)
 		}
 		vehicles = append(vehicles, v)

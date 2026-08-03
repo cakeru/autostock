@@ -105,6 +105,23 @@ func SeedCustomer(t *testing.T, pool *pgxpool.Pool, branchID int64) int64 {
 	return id
 }
 
+func SeedVehicle(t *testing.T, pool *pgxpool.Pool, customerID int64) int64 {
+	t.Helper()
+
+	var id int64
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO vehicles (branch_id, customer_id, plate_number, make, distance_unit)
+		 VALUES ((SELECT branch_id FROM customers WHERE id = $1), $1, $2, 'Test Make', 'km')
+		 RETURNING id`,
+		customerID, fmt.Sprintf("TST-%d-%d", customerID, time.Now().UnixNano())).Scan(&id)
+	require.NoError(t, err, "failed to seed vehicle")
+
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM vehicles WHERE id = $1`, id)
+	})
+	return id
+}
+
 func SeedServiceJob(t *testing.T, pool *pgxpool.Pool, branchID, customerID int64, status string) int64 {
 	t.Helper()
 
