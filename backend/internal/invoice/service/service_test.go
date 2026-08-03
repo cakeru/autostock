@@ -213,7 +213,7 @@ func TestRecordPayment(t *testing.T) {
 	})
 }
 
-func TestInvoiceFrozen(t *testing.T) {
+func TestInvoiceItemEditing(t *testing.T) {
 	s, _, branchID, userID := setupService(t)
 	prodID := testutil.SeedProduct(t, s.pool, branchID, "Frozen Test", "FRZ-001", 10, 50)
 
@@ -222,17 +222,52 @@ func TestInvoiceFrozen(t *testing.T) {
 		ExchangeRate: 4050,
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "issued", inv.Status)
 	assert.Equal(t, "unpaid", inv.PaymentStatus)
 
-	t.Run("rejects add item on issued invoice", func(t *testing.T) {
-		_, err := s.AddItem(context.Background(), branchID, userID, inv.ID, &dto.InvoiceItemReq{
+	t.Run("adds item on issued invoice and deducts stock", func(t *testing.T) {
+		var stockBefore float64
+		s.pool.QueryRow(context.Background(), `SELECT stock_quantity FROM products WHERE id = $1`, prodID).Scan(&stockBefore)
+
+		item, err := s.AddItem(context.Background(), branchID, userID, inv.ID, &dto.InvoiceItemReq{
 			ProductID: &prodID, ItemType: "product", Description: "Extra", Quantity: 1, UnitPriceUSD: 50,
 		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Cannot modify items on a non-draft invoice")
+		require.NoError(t, err)
+		assert.Equal(t, "Extra", item.Description)
+
+		var stockAfter float64
+		s.pool.QueryRow(context.Background(), `SELECT stock_quantity FROM products WHERE id = $1`, prodID).Scan(&stockAfter)
+		assert.Equal(t, stockBefore-1, stockAfter)
 	})
 
-	t.Run("rejects remove item on issued invoice", func(t *testing.T) {
+	t.Run("removes item on issued invoice and restores stock", func(t *testing.T) {
+		var itemID int64
+		err := s.pool.QueryRow(context.Background(), `SELECT id FROM invoice_items WHERE invoice_id = $1 ORDER BY id DESC LIMIT 1`, inv.ID).Scan(&itemID)
+		require.NoError(t, err)
+
+		var stockBefore float64
+		s.pool.QueryRow(context.Background(), `SELECT stock_quantity FROM products WHERE id = $1`, prodID).Scan(&stockBefore)
+
+		err = s.RemoveItem(context.Background(), branchID, userID, itemID)
+		require.NoError(t, err)
+
+		var stockAfter float64
+		s.pool.QueryRow(context.Background(), `SELECT stock_quantity FROM products WHERE id = $1`, prodID).Scan(&stockAfter)
+		assert.Equal(t, stockBefore+1, stockAfter)
+	})
+
+	t.Run("rejects add item on voided invoice", func(t *testing.T) {
+		_, err := s.Void(context.Background(), branchID, inv.ID, userID, "freeze test")
+		require.NoError(t, err)
+
+		_, err = s.AddItem(context.Background(), branchID, userID, inv.ID, &dto.InvoiceItemReq{
+			ProductID: &prodID, ItemType: "product", Description: "Too Late", Quantity: 1, UnitPriceUSD: 50,
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Cannot modify items on a voided invoice")
+	})
+
+	t.Run("rejects remove item on voided invoice", func(t *testing.T) {
 		var itemID int64
 		err := s.pool.QueryRow(context.Background(), `SELECT id FROM invoice_items WHERE invoice_id = $1 LIMIT 1`, inv.ID).Scan(&itemID)
 		if err != nil {
@@ -240,7 +275,7 @@ func TestInvoiceFrozen(t *testing.T) {
 		}
 		err = s.RemoveItem(context.Background(), branchID, userID, itemID)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Cannot modify items on a non-draft invoice")
+		assert.Contains(t, err.Error(), "Cannot modify items on a voided invoice")
 	})
 }
 
