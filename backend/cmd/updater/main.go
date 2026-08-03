@@ -14,9 +14,12 @@ import (
 	"time"
 )
 
-const (
-	logFile = "/repo/deploy.log"
-)
+func repoPath() string {
+	if p := os.Getenv("REPO_PATH"); p != "" {
+		return p
+	}
+	return "/repo"
+}
 
 var (
 	mu      sync.Mutex
@@ -42,7 +45,8 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"status": "deploying", "message": "An update is already running"})
 		return
 	}
-	if _, err := os.Stat("/repo/deploy.sh"); err != nil {
+	repo := repoPath()
+	if _, err := os.Stat(repo + "/deploy.sh"); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "message": "deploy.sh not found in the repo checkout"})
 		return
 	}
@@ -51,14 +55,14 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	lastRun = time.Now()
 	go func() {
 		defer func() { mu.Lock(); running = false; mu.Unlock() }()
-		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		f, err := os.OpenFile(repo+"/deploy.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err != nil {
 			return
 		}
 		defer f.Close()
 		ts := time.Now().Format("2006-01-02 15:04:05")
 		fmt.Fprintf(f, "\n===== deploy started %s =====\n", ts)
-		cmd := exec.Command("/bin/sh", "/repo/deploy.sh")
+		cmd := exec.Command("/bin/sh", repo+"/deploy.sh")
 		cmd.Stdout = f
 		cmd.Stderr = f
 		_ = cmd.Run()
@@ -72,7 +76,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 	tail := ""
-	if b, err := os.ReadFile(logFile); err == nil {
+	if b, err := os.ReadFile(repoPath() + "/deploy.log"); err == nil {
 		if n := len(b); n > 2000 {
 			b = b[n-2000:]
 		}
