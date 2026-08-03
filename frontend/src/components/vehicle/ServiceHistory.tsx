@@ -21,7 +21,7 @@ export function ServiceHistory({ vehicleId, bodyType, unit, onPhoto }: {
 }) {
   const { data: visits, isLoading } = useVehicleTimeline(vehicleId)
   const deleteEvent = useDeleteServiceEvent(vehicleId)
-  const [pendingDelete, setPendingDelete] = useState<{ id: number; kind: 'oil' | 'tire' } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; kind: 'oil' | 'tire' | 'service' } | null>(null)
 
   return (
     <div className="bg-card rounded-lg p-5 shadow-sm">
@@ -46,7 +46,7 @@ export function ServiceHistory({ vehicleId, bodyType, unit, onPhoto }: {
         open={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && deleteEvent.mutate(pendingDelete.id, { onSuccess: () => setPendingDelete(null) })}
-        title={`Remove ${pendingDelete?.kind === 'oil' ? 'oil change' : 'tire'} record`}
+        title={`Remove ${pendingDelete?.kind === 'oil' ? 'oil change' : pendingDelete?.kind === 'service' ? 'service' : 'tire'} record`}
         message="Remove this auto-logged record? The due-for-service estimate will recompute from what's left. The sale/invoice itself is not affected."
         destructive
         loading={deleteEvent.isPending}
@@ -61,7 +61,7 @@ function VisitCard({ visit: v, vehicleId, bodyType, unit, onPhoto, onRemoveEvent
   bodyType?: string
   unit: string
   onPhoto: (url: string) => void
-  onRemoveEvent: (eventId: number, kind: 'oil' | 'tire') => void
+  onRemoveEvent: (eventId: number, kind: 'oil' | 'tire' | 'service') => void
 }) {
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)

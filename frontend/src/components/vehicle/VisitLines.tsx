@@ -17,7 +17,7 @@ export function VisitLines({ visit: v, bodyType, showNotes = true, onRemoveEvent
   visit: Visit
   bodyType?: string
   showNotes?: boolean
-  onRemoveEvent?: (eventId: number, kind: 'oil' | 'tire') => void
+  onRemoveEvent?: (eventId: number, kind: 'oil' | 'tire' | 'service') => void
 }) {
   const svc = v.wheel_service
   const cornerMap: Record<string, CornerData> = {}
@@ -57,6 +57,11 @@ export function VisitLines({ visit: v, bodyType, showNotes = true, onRemoveEvent
         <Row icon={Droplet} title="Oil change" detail={v.oil_note || undefined}
           action={onRemoveEvent && v.oil_event_id ? <RemoveButton onClick={() => onRemoveEvent(v.oil_event_id!, 'oil')} /> : undefined} />
       )}
+
+      {(v.services || []).map((s) => (
+        <Row key={s.id} icon={Wrench} title={s.name}
+          action={onRemoveEvent ? <RemoveButton onClick={() => onRemoveEvent(s.id, 'service')} /> : undefined} />
+      ))}
 
       {(v.parts || []).map((p) => (
         <Row key={p.id} icon={Wrench} title={`${p.part_name} replaced`} detail={p.position || undefined} />
