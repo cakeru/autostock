@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, Minus, X, Trash2, Search, Package as PackageIcon, Delete, Check, ScanLine, Percent, Scissors, ShoppingCart, ChevronUp, ChevronDown, Car, Wrench } from 'lucide-react'
+import { Plus, Minus, X, Trash2, Search, Package as PackageIcon, Delete, Check, ScanLine, Percent, Scissors, ShoppingCart, ChevronUp, ChevronDown, Car, Wrench, AlertTriangle } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
 import { productsApi } from '@/services/products'
 import { useCustomers, useCreateCustomer, useCustomerVehicles, useCreateVehicle } from '@/hooks/useCustomers'
@@ -75,6 +75,9 @@ export function Sale() {
   const lineGross = (l: CartLine) => l.quantity * l.unit_price_usd
   const subtotal = cart.reduce((s, l) => s + lineGross(l), 0)
   const itemCount = cart.reduce((s, l) => s + l.quantity, 0)
+  // A tire/oil line in the cart without a vehicle means the backend won't log
+  // the oil change / tire install on the car — warn staff while they can fix it.
+  const hasServiceProduct = cart.some((l) => l.product_type === 'tire' || l.is_oil_product)
   const lineDiscTotal = cart.reduce((s, l) => s + parseDiscount(l.discountRaw, lineGross(l)), 0)
   const afterLine = subtotal - lineDiscTotal
   const rawDisc = discMode === 'percent' ? afterLine * (parseFloat(discInput) || 0) / 100
@@ -107,7 +110,7 @@ export function Sale() {
       // bulk-add-then-discount and price individual units separately.
       const pristine = c.find((l) => l.product_id === p.id && !l.discountRaw && l.unit_price_usd === p.sell_price)
       if (pristine) return c.map((l) => (l.key === pristine.key ? { ...l, quantity: l.quantity + 1 } : l))
-      return [...c, { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: 1, unit_price_usd: p.sell_price, image_url: p.image_url, is_bulk: p.is_bulk, unit: p.unit }]
+      return [...c, { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: 1, unit_price_usd: p.sell_price, image_url: p.image_url, is_bulk: p.is_bulk, unit: p.unit, product_type: p.type, is_oil_product: p.is_oil_product }]
     })
   }
   const addLine = (description: string, unit_price_usd: number, item_type: CartLine['item_type']) => {
@@ -115,7 +118,7 @@ export function Sale() {
   }
   const addPackage = (p: Product, qty: number, sp: SalePackage) => {
     const lines: CartLine[] = [
-      { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: qty, unit_price_usd: p.sell_price, image_url: p.image_url },
+      { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: qty, unit_price_usd: p.sell_price, image_url: p.image_url, product_type: p.type, is_oil_product: p.is_oil_product },
       ...sp.addons.map((a) => ({ key: nextKey(), item_type: a.item_type, description: a.description, quantity: a.per_tire ? qty : 1, unit_price_usd: a.unit_price_usd })),
     ]
     setCart((c) => [...c, ...lines])
@@ -345,6 +348,12 @@ export function Sale() {
               />
             </div>
           )}
+          {hasServiceProduct && !vehicleId && (
+            <div className="mt-2 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-snug text-amber-700">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>This sale includes a tire or oil product but no vehicle is selected — the service record won't be logged on the car automatically. Pick a customer + vehicle to record it.</span>
+            </div>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2 lg:max-h-none max-h-[40vh]">
@@ -463,21 +472,29 @@ export function Sale() {
       {/* Mobile sticky checkout bar — always-visible total, floats above the tab nav */}
       {cart.length > 0 && !cartOpen && (
         <div
-          className="fixed inset-x-0 z-40 flex items-center gap-3 border-t bg-card px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] lg:hidden"
+          className="fixed inset-x-0 z-40 flex flex-col gap-1 border-t bg-card px-4 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] lg:hidden"
           style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <button onClick={() => setCartOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-            <span className="relative flex-shrink-0">
-              <ShoppingCart className="h-6 w-6 text-primary" />
-              <span className="absolute -right-2 -top-2 grid h-4 min-w-[1rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">{itemCount}</span>
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[11px] leading-none text-muted-foreground">View sale</span>
-              <span className="block text-lg font-bold leading-tight tabular-nums">{formatUSD(totalUSD)}</span>
-            </span>
-            <ChevronUp className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-          </button>
-          <Button className="h-11 flex-shrink-0 px-6 text-base" onClick={() => setPaying(true)}>Charge</Button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCartOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <span className="relative flex-shrink-0">
+                <ShoppingCart className="h-6 w-6 text-primary" />
+                <span className="absolute -right-2 -top-2 grid h-4 min-w-[1rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">{itemCount}</span>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11px] leading-none text-muted-foreground">View sale</span>
+                <span className="block text-lg font-bold leading-tight tabular-nums">{formatUSD(totalUSD)}</span>
+              </span>
+              <ChevronUp className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            </button>
+            <Button className="h-11 flex-shrink-0 px-6 text-base" onClick={() => setPaying(true)}>Charge</Button>
+          </div>
+          {hasServiceProduct && !vehicleId && (
+            <p className="flex items-center gap-1.5 text-[10px] leading-tight text-amber-700">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              Tire/oil sale without a vehicle — service record won't be logged on the car.
+            </p>
+          )}
         </div>
       )}
 

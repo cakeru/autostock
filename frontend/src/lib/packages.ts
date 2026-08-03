@@ -18,6 +18,8 @@ export interface CartLine {
   image_url?: string
   is_bulk?: boolean // sold by volume — allow fractional quantity entry
   unit?: string
+  product_type?: 'tire' | 'part' | 'consumable' | 'labor' // set on product lines
+  is_oil_product?: boolean // drives the auto-logged oil-change record
   discountRaw?: string // per-line discount as typed: "10%" or "5" ($ off the line)
 }
 
