@@ -44,6 +44,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.InvoiceFi
 		       i.customer_id, COALESCE(c.name, ''),
 		       i.vehicle_id,
 		       CASE WHEN v.id IS NOT NULL THEN COALESCE(v.plate_number, '') ELSE '' END,
+		       i.mileage_unit,
 		       i.service_job_id,
 		       CASE WHEN sj.id IS NOT NULL THEN sj.job_number ELSE '' END,
 		       i.subtotal, i.total_usd, i.exchange_rate, i.total_khr,
@@ -78,7 +79,7 @@ func (s *Service) List(ctx context.Context, branchID int64, filter dto.InvoiceFi
 	for rows.Next() {
 		var inv dto.InvoiceListResponse
 		if err := rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.Status, &inv.PaymentStatus,
-			&inv.CustomerID, &inv.CustomerName, &inv.VehicleID, &inv.PlateNumber,
+			&inv.CustomerID, &inv.CustomerName, &inv.VehicleID, &inv.PlateNumber, &inv.MileageUnit,
 			&inv.ServiceJobID, &inv.JobNumber, &inv.Subtotal, &inv.TotalUSD,
 			&inv.ExchangeRate, &inv.TotalKHR, &inv.PaidAmount, &inv.IssuedAt, &inv.CreatedAt,
 			&inv.CreatedByID, &inv.CreatedByName,
@@ -102,7 +103,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Invoi
 		       i.vehicle_id,
 		       CASE WHEN v.id IS NOT NULL THEN COALESCE(v.plate_number, '') ELSE '' END,
 		       CASE WHEN v.id IS NOT NULL THEN CONCAT_WS(' ', COALESCE(v.make,''), COALESCE(v.model,''), COALESCE(v.year::text,'')) ELSE '' END,
-		       i.mileage,
+		       i.mileage, i.mileage_unit,
 		       i.service_job_id,
 		       CASE WHEN sj.id IS NOT NULL THEN sj.job_number ELSE '' END,
 		       i.subtotal, i.tax_rate, i.tax_amount, i.discount,
@@ -120,7 +121,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Invoi
 		WHERE i.id = $1 AND i.branch_id = $2`, id, branchID).
 		Scan(&inv.ID, &inv.InvoiceNumber, &inv.Status, &inv.PaymentStatus,
 			&inv.CustomerID, &inv.CustomerName, &inv.CustomerPhone, &inv.CustomerAddr,
-			&inv.VehicleID, &inv.PlateNumber, &inv.VehicleInfo, &inv.Mileage,
+			&inv.VehicleID, &inv.PlateNumber, &inv.VehicleInfo, &inv.Mileage, &inv.MileageUnit,
 			&inv.ServiceJobID, &inv.JobNumber,
 			&inv.Subtotal, &inv.TaxRate, &inv.TaxAmount, &inv.Discount,
 			&inv.TotalUSD, &inv.ExchangeRate, &inv.TotalKHR,
@@ -238,21 +239,32 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 		}
 	}
 
+	// The odometer is recorded in the vehicle's own unit (km or mi) so a
+	// miles-only import stays consistent; frozen on the invoice like the
+	// exchange rate, so history doesn't shift if the vehicle is later edited.
+	mileageUnit := "km"
+	if req.VehicleID != nil {
+		_ = s.pool.QueryRow(ctx, `SELECT distance_unit FROM vehicles WHERE id = $1`, *req.VehicleID).Scan(&mileageUnit)
+		if mileageUnit != "mi" {
+			mileageUnit = "km"
+		}
+	}
+
 	var inv dto.InvoiceListResponse
 	err = tx.QueryRow(ctx, `
-		INSERT INTO invoices (branch_id, invoice_number, customer_id, vehicle_id, service_job_id, mileage,
+		INSERT INTO invoices (branch_id, invoice_number, customer_id, vehicle_id, service_job_id, mileage, mileage_unit,
 		                      subtotal, tax_rate, tax_amount, discount,
 		                      total_usd, exchange_rate, total_khr,
 		                      payment_status, payment_method, notes, status, issued_at, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'issued',NOW(),$17)
-		RETURNING id, invoice_number, status, payment_status, customer_id, vehicle_id, service_job_id,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'issued',NOW(),$18)
+		RETURNING id, invoice_number, status, payment_status, customer_id, vehicle_id, service_job_id, mileage, mileage_unit,
 		          subtotal, total_usd, exchange_rate, total_khr, paid_amount, issued_at, created_at, created_by`,
-		branchID, invoiceNumber, req.CustomerID, req.VehicleID, req.ServiceJobID, req.Mileage,
+		branchID, invoiceNumber, req.CustomerID, req.VehicleID, req.ServiceJobID, req.Mileage, mileageUnit,
 		subtotal, taxRate, taxAmount, discount,
 		totalUSD, exchangeRate, totalKHR,
 		paymentStatus, req.PaymentMethod, req.Notes, userID).
 		Scan(&inv.ID, &inv.InvoiceNumber, &inv.Status, &inv.PaymentStatus,
-			&inv.CustomerID, &inv.VehicleID, &inv.ServiceJobID,
+			&inv.CustomerID, &inv.VehicleID, &inv.ServiceJobID, &inv.Mileage, &inv.MileageUnit,
 			&inv.Subtotal, &inv.TotalUSD, &inv.ExchangeRate,
 			&inv.TotalKHR, &inv.PaidAmount, &inv.IssuedAt, &inv.CreatedAt,
 			&inv.CreatedByID)
@@ -332,13 +344,16 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 			if !ok {
 				continue
 			}
+			// Ratings are entered in the shop's global unit; store them in the
+			// vehicle's unit so the event and the odometer stay on one scale.
+			lifeKm := kmToVehicleUnit(info.lifeKm, mileageUnit)
 			if info.productType == "tire" && tireName == "" {
 				tireName = info.name
-				tireLifeKm, tireLifeDays, tireLifeMonths = info.lifeKm, info.lifeDays, info.lifeMonths // the sold tire's rating anchors its reminder
+				tireLifeKm, tireLifeDays, tireLifeMonths = lifeKm, info.lifeDays, info.lifeMonths // the sold tire's rating anchors its reminder
 			}
 			if info.isOil && oilName == "" {
 				oilName = info.name
-				oilLifeKm, oilLifeDays, oilLifeMonths = info.lifeKm, info.lifeDays, info.lifeMonths
+				oilLifeKm, oilLifeDays, oilLifeMonths = lifeKm, info.lifeDays, info.lifeMonths
 			}
 		}
 		occurredAt := time.Now()
@@ -538,6 +553,12 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 	}
 	defer rows.Close()
 
+	vehicleUnit := "km"
+	_ = s.pool.QueryRow(ctx, `SELECT distance_unit FROM vehicles WHERE id = $1`, vehicleID).Scan(&vehicleUnit)
+	if vehicleUnit != "mi" {
+		vehicleUnit = "km"
+	}
+
 	var tireName, oilName string
 	var tireLifeKm, tireLifeDays, tireLifeMonths *int
 	var oilLifeKm, oilLifeDays, oilLifeMonths *int
@@ -549,6 +570,7 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 		if err := rows.Scan(&ptype, &isOil, &name, &km, &days, &months); err != nil {
 			return fmt.Errorf("scan invoice product: %w", err)
 		}
+		km = kmToVehicleUnit(km, vehicleUnit)
 		if ptype == "tire" && tireName == "" {
 			tireName = name
 			tireLifeKm, tireLifeDays, tireLifeMonths = km, days, months
@@ -1193,6 +1215,19 @@ func (s *Service) generateInvoiceNumber(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("generate invoice number: %w", err)
 	}
 	return fmt.Sprintf("INV-%s-%04d", year, seq), nil
+}
+
+// kmToVehicleUnit converts a rating expressed in km (shop's global unit) into
+// the vehicle's own unit — a miles-only car gets the same interval in miles.
+func kmToVehicleUnit(km *int, unit string) *int {
+	if km == nil {
+		return nil
+	}
+	if unit == "mi" {
+		v := int(math.Round(float64(*km) / 1.609344))
+		return &v
+	}
+	return km
 }
 
 func nullIfEmpty(s string) *string {

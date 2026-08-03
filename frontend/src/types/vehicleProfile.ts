@@ -31,6 +31,7 @@ export interface VehicleProfile {
   customer_name: string
   customer_phone?: string
   record_count: number
+  distance_unit?: string
   last_mileage?: number
   last_service_at?: string
   created_at: string
@@ -95,6 +96,7 @@ export interface DueForServiceItem extends DueStatus {
   customer_id: number
   customer_name: string
   customer_phone?: string
+  distance_unit?: string
 }
 
 export interface PartRule {

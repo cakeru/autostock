@@ -23,6 +23,7 @@ export interface InvoiceDetail extends Invoice {
   customer_address?: string
   vehicle_info?: string
   mileage?: number
+  mileage_unit?: string
   created_by_name?: string
   items: InvoiceItem[]
   payments?: Payment[]

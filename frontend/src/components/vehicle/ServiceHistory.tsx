@@ -4,8 +4,6 @@ import { formatDate } from '@/utils/date'
 import { formatUSD } from '@/utils/currency'
 import { imageSrc } from '@/utils/imageUrl'
 import { useNavigate } from 'react-router-dom'
-import { useSettings } from '@/hooks/useSettings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { VisitLines } from './VisitLines'
 import { useVehicleTimeline, useAddVisitPhoto, useSetPhotoVisibility, useDeleteServiceEvent } from '@/hooks/useVehicleProfile'
@@ -15,13 +13,12 @@ import type { Visit, VisitPhoto } from '@/types/vehicleProfile'
 // visit, newest first, each showing everything done that day (tires, alignment
 // blueprint, oil, parts, notes), what it cost, and photo evidence. Replaces the
 // old split of wheel-history + activity list.
-export function ServiceHistory({ vehicleId, bodyType, onPhoto }: {
+export function ServiceHistory({ vehicleId, bodyType, unit, onPhoto }: {
   vehicleId: number
   bodyType?: string
+  unit: string
   onPhoto: (url: string) => void
 }) {
-  const { data: settings } = useSettings()
-  const unit = unitLabel(distanceUnit(settings))
   const { data: visits, isLoading } = useVehicleTimeline(vehicleId)
   const deleteEvent = useDeleteServiceEvent(vehicleId)
   const [pendingDelete, setPendingDelete] = useState<{ id: number; kind: 'oil' | 'tire' } | null>(null)

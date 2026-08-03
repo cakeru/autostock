@@ -192,7 +192,7 @@ func (s *Service) Delete(ctx context.Context, branchID int64, id int64) error {
 
 func (s *Service) ListVehicles(ctx context.Context, customerID int64) ([]models.Vehicle, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), COALESCE(notes,''), created_at, updated_at
+		SELECT id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), distance_unit, COALESCE(notes,''), created_at, updated_at
 		FROM vehicles WHERE customer_id = $1 ORDER BY created_at DESC`, customerID)
 	if err != nil {
 		return nil, fmt.Errorf("query vehicles: %w", err)
@@ -217,10 +217,10 @@ func (s *Service) ListVehicles(ctx context.Context, customerID int64) ([]models.
 func (s *Service) GetVehicle(ctx context.Context, id int64) (*models.Vehicle, error) {
 	var v models.Vehicle
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), COALESCE(notes,''), created_at, updated_at
+		SELECT id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), distance_unit, COALESCE(notes,''), created_at, updated_at
 		FROM vehicles WHERE id = $1`, id).
 		Scan(&v.ID, &v.CustomerID, &v.PlateNumber, &v.Make, &v.Model,
-			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
+			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.DistanceUnit, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -241,12 +241,12 @@ func (s *Service) CreateVehicle(ctx context.Context, customerID int64, req *dto.
 
 	var v models.Vehicle
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO vehicles (branch_id, customer_id, plate_number, make, model, year, vin, color, body_type, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10)
-		RETURNING id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), COALESCE(notes,''), created_at, updated_at`,
-		branchID, customerID, req.PlateNumber, req.Make, req.Model, req.Year, req.VIN, req.Color, req.BodyType, req.Notes).
+		INSERT INTO vehicles (branch_id, customer_id, plate_number, make, model, year, vin, color, body_type, distance_unit, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), COALESCE(NULLIF($10, ''), 'km'), $11)
+		RETURNING id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), distance_unit, COALESCE(notes,''), created_at, updated_at`,
+		branchID, customerID, req.PlateNumber, req.Make, req.Model, req.Year, req.VIN, req.Color, req.BodyType, req.DistanceUnit, req.Notes).
 		Scan(&v.ID, &v.CustomerID, &v.PlateNumber, &v.Make, &v.Model,
-			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
+			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.DistanceUnit, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create vehicle: %w", err)
 	}
@@ -264,13 +264,14 @@ func (s *Service) UpdateVehicle(ctx context.Context, id int64, req *dto.UpdateVe
 		    vin = COALESCE($5, vin),
 		    color = COALESCE($6, color),
 		    body_type = COALESCE($7, body_type),
-		    notes = COALESCE($8, notes),
+		    distance_unit = COALESCE(NULLIF($8, ''), distance_unit),
+		    notes = COALESCE($9, notes),
 		    updated_at = NOW()
-		WHERE id = $9
-		RETURNING id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), COALESCE(notes,''), created_at, updated_at`,
-		req.PlateNumber, req.Make, req.Model, req.Year, req.VIN, req.Color, req.BodyType, req.Notes, id).
+		WHERE id = $10
+		RETURNING id, customer_id, plate_number, COALESCE(make,''), COALESCE(model,''), COALESCE(year, 0), COALESCE(vin,''), COALESCE(color,''), COALESCE(body_type,''), distance_unit, COALESCE(notes,''), created_at, updated_at`,
+		req.PlateNumber, req.Make, req.Model, req.Year, req.VIN, req.Color, req.BodyType, req.DistanceUnit, req.Notes, id).
 		Scan(&v.ID, &v.CustomerID, &v.PlateNumber, &v.Make, &v.Model,
-			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
+			&v.Year, &v.VIN, &v.Color, &v.BodyType, &v.DistanceUnit, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, domain.ErrNotFound

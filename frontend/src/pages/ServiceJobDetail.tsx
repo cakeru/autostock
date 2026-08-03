@@ -9,7 +9,6 @@ import { useCreateInvoiceFromJob } from '@/hooks/useInvoices'
 import { useProducts } from '@/hooks/useProducts'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useSettings } from '@/hooks/useSettings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { StatusBadge } from '@/components/servicejob/StatusBadge'
 import { PriorityBadge } from '@/components/servicejob/PriorityBadge'
 import { Button } from '@/components/ui/button'
@@ -30,7 +29,7 @@ export function ServiceJobDetail() {
   const { data: productsData } = useProducts({ per_page: 100 })
   const { data: employees } = useEmployees()
   const { data: settingsData } = useSettings()
-  const unit = unitLabel(distanceUnit(settingsData))
+  const unit = job ? (job.mileage_unit === 'mi' ? 'mi' : 'km') : 'km'
   const updateMutation = useUpdateServiceJob()
   const completeMutation = useCompleteServiceJob()
   const approveQuoteMutation = useApproveQuote()

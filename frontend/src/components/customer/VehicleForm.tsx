@@ -10,15 +10,17 @@ export interface VehicleFormProps {
   onSubmit: (data: CreateVehicleRequest) => void
   onCancel: () => void
   loading?: boolean
+  defaultUnit?: string
 }
 
-export function VehicleForm({ initial, onSubmit, onCancel, loading }: VehicleFormProps) {
+export function VehicleForm({ initial, onSubmit, onCancel, loading, defaultUnit = 'km' }: VehicleFormProps) {
   const [plateNumber, setPlateNumber] = useState(initial?.plate_number || '')
   const [make, setMake] = useState(initial?.make || '')
   const [model, setModel] = useState(initial?.model || '')
   const [year, setYear] = useState(initial?.year?.toString() || '')
   const [color, setColor] = useState(initial?.color || '')
   const [bodyType, setBodyType] = useState(initial?.body_type || '')
+  const [distanceUnit, setDistanceUnit] = useState(initial?.distance_unit || defaultUnit)
   const [notes, setNotes] = useState(initial?.notes || '')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -30,6 +32,7 @@ export function VehicleForm({ initial, onSubmit, onCancel, loading }: VehicleFor
       year: year ? parseInt(year) : undefined,
       color,
       body_type: bodyType || undefined,
+      distance_unit: distanceUnit,
       notes,
     })
   }
@@ -56,9 +59,17 @@ export function VehicleForm({ initial, onSubmit, onCancel, loading }: VehicleFor
           <Input value={year} onChange={(e) => setYear(e.target.value)} type="number" min="1900" max="2100" />
         </div>
         <div className="space-y-1">
-          <Label>Color</Label>
-          <Input value={color} onChange={(e) => setColor(e.target.value)} />
+          <Label>Odometer unit</Label>
+          <Select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value)}>
+            <option value="km">Kilometers (km)</option>
+            <option value="mi">Miles (mi)</option>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">Imported cars often read miles only — pick what this car's odometer shows.</p>
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label>Color</Label>
+        <Input value={color} onChange={(e) => setColor(e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label>Body type</Label>

@@ -26,6 +26,7 @@ type Vehicle struct {
 	VIN         string    `json:"vin,omitempty"`
 	Color       string    `json:"color,omitempty"`
 	BodyType    string    `json:"body_type,omitempty"`
+	DistanceUnit string   `json:"distance_unit"`
 	Notes       string    `json:"notes,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

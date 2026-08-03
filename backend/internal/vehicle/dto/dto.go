@@ -20,10 +20,11 @@ type VehicleProfileResponse struct {
 	LastServiceAt *time.Time `json:"last_service_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 
-	OilIntervalKm    *int `json:"oil_interval_km,omitempty"`
-	OilIntervalDays  *int `json:"oil_interval_days,omitempty"`
-	TireIntervalKm   *int `json:"tire_interval_km,omitempty"`
-	TireIntervalDays *int `json:"tire_interval_days,omitempty"`
+	OilIntervalKm    *int   `json:"oil_interval_km,omitempty"`
+	OilIntervalDays  *int   `json:"oil_interval_days,omitempty"`
+	TireIntervalKm   *int   `json:"tire_interval_km,omitempty"`
+	TireIntervalDays *int   `json:"tire_interval_days,omitempty"`
+	DistanceUnit     string `json:"distance_unit"` // "km" | "mi" — the vehicle's own unit
 
 	ShareToken string `json:"share_token,omitempty"`
 
@@ -120,6 +121,7 @@ type DueForServiceItem struct {
 	CustomerID    int64  `json:"customer_id"`
 	CustomerName  string `json:"customer_name"`
 	CustomerPhone string `json:"customer_phone,omitempty"`
+	DistanceUnit  string `json:"distance_unit"` // "km" | "mi" — the vehicle's own unit
 	DueStatus
 }
 

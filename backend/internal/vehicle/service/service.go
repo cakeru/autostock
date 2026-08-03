@@ -30,13 +30,13 @@ func (s *Service) GetProfile(ctx context.Context, branchID, id int64) (*dto.Vehi
 		       COALESCE(vh.vin,''), COALESCE(vh.color,''), COALESCE(vh.body_type,''), COALESCE(vh.notes,''),
 		       vh.customer_id, COALESCE(c.name,''), COALESCE(c.phone,''), vh.created_at,
 		       vh.oil_interval_km, vh.oil_interval_days, vh.tire_interval_km, vh.tire_interval_days,
-		       COALESCE(vh.share_token,'')
+		       vh.distance_unit, COALESCE(vh.share_token,'')
 		FROM vehicles vh
 		JOIN customers c ON c.id = vh.customer_id
 		WHERE vh.id = $1 AND vh.branch_id = $2`, id, branchID).
 		Scan(&v.ID, &v.PlateNumber, &v.Make, &v.Model, &year, &v.VIN, &v.Color, &v.BodyType, &v.Notes,
 			&v.CustomerID, &v.CustomerName, &v.CustomerPhone, &v.CreatedAt,
-			&v.OilIntervalKm, &v.OilIntervalDays, &v.TireIntervalKm, &v.TireIntervalDays,
+			&v.OilIntervalKm, &v.OilIntervalDays, &v.TireIntervalKm, &v.TireIntervalDays, &v.DistanceUnit,
 			&v.ShareToken)
 	if err != nil {
 		if err == pgx.ErrNoRows {

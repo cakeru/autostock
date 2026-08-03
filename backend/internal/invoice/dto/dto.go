@@ -86,6 +86,8 @@ type InvoiceListResponse struct {
 	CustomerName  string     `json:"customer_name,omitempty"`
 	VehicleID     *int64     `json:"vehicle_id,omitempty"`
 	PlateNumber   string     `json:"plate_number,omitempty"`
+	Mileage       *int       `json:"mileage,omitempty"`
+	MileageUnit   string     `json:"mileage_unit"`
 	ServiceJobID  *int64     `json:"service_job_id,omitempty"`
 	JobNumber     string     `json:"job_number,omitempty"`
 	Subtotal      float64    `json:"subtotal"`
@@ -112,6 +114,7 @@ type InvoiceDetailResponse struct {
 	PlateNumber    string            `json:"plate_number,omitempty"`
 	VehicleInfo    string            `json:"vehicle_info,omitempty"`
 	Mileage        *int              `json:"mileage,omitempty"`
+	MileageUnit    string            `json:"mileage_unit"`
 	ServiceJobID   *int64            `json:"service_job_id,omitempty"`
 	JobNumber      string            `json:"job_number,omitempty"`
 	Items          []InvoiceItemResp `json:"items"`

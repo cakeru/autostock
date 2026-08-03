@@ -5,6 +5,7 @@ import { formatUSD } from '@/utils/currency'
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useCustomer, useServiceHistory, useCreateVehicle, useDeleteVehicle, useUpdateCustomer } from '@/hooks/useCustomers'
+import { useSettings } from '@/hooks/useSettings'
 import { VehicleForm } from '@/components/customer/VehicleForm'
 import { CustomerForm } from '@/components/customer/CustomerForm'
 import { CustomerDeposits } from '@/components/customer/CustomerDeposits'
@@ -20,6 +21,7 @@ export function CustomerDetail() {
   const createVehicle = useCreateVehicle()
   const deleteVehicle = useDeleteVehicle()
   const updateCustomer = useUpdateCustomer()
+  const { data: settings } = useSettings()
 
   const [showVehicleForm, setShowVehicleForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -159,7 +161,7 @@ export function CustomerDetail() {
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 bg-black/50">
           <div className="bg-card rounded-lg p-5 shadow-lg w-full max-w-lg mx-4">
             <h2 className="text-sm font-semibold mb-3">Add Vehicle</h2>
-            <VehicleForm onSubmit={handleAddVehicle} onCancel={() => setShowVehicleForm(false)} loading={createVehicle.isPending} />
+            <VehicleForm onSubmit={handleAddVehicle} onCancel={() => setShowVehicleForm(false)} loading={createVehicle.isPending} defaultUnit={settings?.distance_unit === 'mi' ? 'mi' : 'km'} />
           </div>
         </div>
       )}

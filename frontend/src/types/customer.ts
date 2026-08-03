@@ -26,6 +26,7 @@ export interface Vehicle {
   id: number
   customer_id: number
   plate_number: string
+  distance_unit?: string
   make?: string
   model?: string
   year?: number
@@ -78,6 +79,7 @@ export interface UpdateCustomerRequest {
 
 export interface CreateVehicleRequest {
   plate_number: string
+  distance_unit?: string
   make?: string
   model?: string
   year?: number
@@ -89,6 +91,7 @@ export interface CreateVehicleRequest {
 
 export interface UpdateVehicleRequest {
   plate_number?: string
+  distance_unit?: string
   make?: string
   model?: string
   year?: number

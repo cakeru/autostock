@@ -1,6 +1,7 @@
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useState, useEffect, useCallback } from 'react'
 import { useSettings, useUpdateSetting, useBatchUpdateSettings, useUpdateExchangeRate } from '@/hooks/useSettings'
+import { toast } from 'sonner'
 import { useIntervalSettings, useUpdateIntervalSettings } from '@/hooks/useVehicleProfile'
 import type { PartRule } from '@/types/vehicleProfile'
 import { distanceUnit, unitLabel } from '@/utils/units'
@@ -12,6 +13,7 @@ import { PACKAGES, LABOR_PRESETS, FEE_PRESETS, DEFAULT_PAYMENT_METHODS, parseArr
 import type { SalePackage, Preset } from '@/lib/packages'
 import { downloadFile } from '@/utils/download'
 import { TelegramSettings } from '@/components/settings/TelegramSettings'
+import api from '@/services/api'
 
 function useSavedTimeout() {
   const [saved, setSaved] = useState(false)
@@ -20,6 +22,62 @@ function useSavedTimeout() {
     setTimeout(() => setSaved(false), 3000)
   }, [])
   return { saved, trigger }
+}
+
+// "Update now": asks the updater agent to pull + rebuild + restart the app.
+function UpdatesSection() {
+  const [updating, setUpdating] = useState(false)
+  const [logTail, setLogTail] = useState('')
+  const [available, setAvailable] = useState(true)
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/updates/status')
+      const st = res.data.data || {}
+      setAvailable(st.status !== 'disabled' && st.status !== 'unavailable')
+      setLogTail(st.log_tail || '')
+      if (st.status === 'deploying') {
+        setUpdating(true)
+        setTimeout(refreshStatus, 4000)
+      } else {
+        setUpdating(false)
+      }
+    } catch {
+      setAvailable(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshStatus()
+  }, [refreshStatus])
+
+  const runUpdate = async () => {
+    setUpdating(true)
+    try {
+      await api.post('/updates/deploy')
+      toast.success('Update started — the app will restart in a moment')
+      setTimeout(refreshStatus, 4000)
+    } catch {
+      setUpdating(false)
+    }
+  }
+
+  return (
+    <Section title="Updates" description="Pull the latest version from GitHub and restart the app">
+      <div className="space-y-3 max-w-lg">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={runUpdate} disabled={updating || !available}>
+            <Download className="h-3.5 w-3.5" /> {updating ? 'Updating…' : 'Update now'}
+          </Button>
+          {!available && <span className="text-xs text-muted-foreground">Not configured on this server</span>}
+          {updating && <span className="text-xs text-primary">Deploy in progress — the page will reload when the app restarts</span>}
+        </div>
+        {logTail && (
+          <pre className="max-h-48 overflow-y-auto rounded-md bg-muted/50 p-3 font-mono text-[11px] leading-snug text-muted-foreground">{logTail}</pre>
+        )}
+      </div>
+    </Section>
+  )
 }
 
 export function Settings() {
@@ -166,6 +224,8 @@ export function Settings() {
           />
         </div>
       </Section>
+
+      <UpdatesSection />
 
       <Section title="Backups" description="The whole database is dumped automatically every night into the server's backup folder (kept 14 days)">
         <div className="space-y-3 max-w-md">

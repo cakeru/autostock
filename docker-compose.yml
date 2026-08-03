@@ -47,6 +47,9 @@ services:
       # Folder holding the nightly database backups (the host folder is chosen
       # by the bind-mount below); served by the Settings "Download backup" button.
       BACKUP_DIR: /backups
+      # "Update now" agent (compose service `updater`); the Settings button is
+      # hidden/disabled when unset.
+      UPDATER_URL: ${UPDATER_URL:-http://updater:8081}
     volumes:
       - uploads_data:/app/uploads
       - ${BACKUP_DIR:-./backups}:/backups:ro
@@ -90,6 +93,23 @@ services:
         find /backups -name "autostock-*.sql.gz" -mtime +14 -delete;
         sleep 86400;
       done'
+
+  # "Update now" agent (Settings page): holds the Docker socket + repo checkout
+  # and runs deploy.sh on demand. Deliberately not rebuilt by the deploy, so it
+  # survives the app restart. The repo must be public or carry credentials.
+  updater:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.updater
+    container_name: autostock-updater
+    restart: unless-stopped
+    environment:
+      UPDATER_PORT: "8081"
+    volumes:
+      - ${REPO_DIR:-.}:/repo
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

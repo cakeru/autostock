@@ -12,8 +12,6 @@ import { VehicleForm } from '@/components/customer/VehicleForm'
 import { CurrentCondition } from '@/components/vehicle/CurrentCondition'
 import { ServiceHistory } from '@/components/vehicle/ServiceHistory'
 import { formatDate } from '@/utils/date'
-import { useSettings } from '@/hooks/useSettings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { imageSrc } from '@/utils/imageUrl'
 import { useUpdateVehicle } from '@/hooks/useCustomers'
 import {
@@ -28,9 +26,7 @@ export function VehicleDetail() {
   const navigate = useNavigate()
   const vehicleId = parseInt(id || '0')
 
-  const { data: settings } = useSettings()
   const { data: vehicle, isLoading } = useVehicleProfile(vehicleId)
-  const unit = unitLabel(distanceUnit(settings))
   const updateVehicle = useUpdateVehicle()
   const createRecord = useCreateVehicleRecord(vehicleId)
   const createServiceEvent = useCreateServiceEvent(vehicleId)
@@ -45,6 +41,9 @@ export function VehicleDetail() {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>
   if (!vehicle) return <p className="text-sm text-destructive">Vehicle not found</p>
+
+  // Each vehicle has its own unit — a miles-only import stays in miles.
+  const unit = vehicle.distance_unit === 'mi' ? 'mi' : 'km'
 
   const specLine = [vehicle.make, vehicle.model].filter(Boolean).join(' ') + (vehicle.year ? ` (${vehicle.year})` : '')
 
@@ -109,9 +108,9 @@ export function VehicleDetail() {
         </div>
       </div>
 
-      <CurrentCondition vehicleId={vehicleId} bodyType={vehicle.body_type} due={vehicle.due} />
+      <CurrentCondition vehicleId={vehicleId} bodyType={vehicle.body_type} due={vehicle.due} unit={unit} />
 
-      <ServiceHistory vehicleId={vehicleId} bodyType={vehicle.body_type} onPhoto={setLightboxUrl} />
+      <ServiceHistory vehicleId={vehicleId} bodyType={vehicle.body_type} unit={unit} onPhoto={setLightboxUrl} />
 
       {showEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

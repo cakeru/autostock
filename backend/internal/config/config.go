@@ -24,6 +24,10 @@ type Config struct {
 	// latest one for download.
 	BackupDir string
 
+	// UpdaterURL is the "update now" agent (compose service `updater`); empty
+	// disables the Settings update button.
+	UpdaterURL string
+
 	Storage StorageConfig
 }
 
@@ -58,6 +62,7 @@ func Load() *Config {
 		LogLevel:        getEnv("LOG_LEVEL", "debug"),
 		AppEnv:          getEnv("APP_ENV", "development"),
 		BackupDir:       getEnv("BACKUP_DIR", "./backups"),
+		UpdaterURL:      getEnv("UPDATER_URL", ""),
 		TelegramEnabled: getEnv("TELEGRAM_ENABLED", "false") == "true",
 		TelegramToken:   getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:  getEnv("TELEGRAM_CHAT_ID", ""),

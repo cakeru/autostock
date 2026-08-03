@@ -102,7 +102,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Servi
 		       sj.vehicle_id,
 		       CASE WHEN v.id IS NOT NULL THEN COALESCE(v.plate_number, '') ELSE '' END,
 		       CASE WHEN v.id IS NOT NULL THEN CONCAT_WS(' ', COALESCE(v.make,''), COALESCE(v.model,''), COALESCE(v.year::text,'')) ELSE '' END,
-		       sj.mileage,
+		       sj.mileage, sj.mileage_unit,
 		       sj.description, COALESCE(sj.diagnosis, ''), COALESCE(sj.work_performed, ''),
 		       sj.estimated_hours, sj.actual_hours, sj.started_at, sj.completed_at,
 		       sj.invoice_id, COALESCE(sj.notes, ''), sj.scheduled_at,
@@ -119,7 +119,7 @@ func (s *Service) Get(ctx context.Context, branchID int64, id int64) (*dto.Servi
 		WHERE sj.id = $1 AND sj.branch_id = $2`, id, branchID).
 		Scan(&j.ID, &j.BranchID, &j.JobNumber, &j.Status, &j.Priority,
 			&j.CustomerID, &j.CustomerName, &j.CustomerPhone,
-			&j.VehicleID, &j.PlateNumber, &j.VehicleInfo, &j.Mileage,
+			&j.VehicleID, &j.PlateNumber, &j.VehicleInfo, &j.Mileage, &j.MileageUnit,
 			&j.Description, &j.Diagnosis, &j.WorkPerformed,
 			&j.EstimatedHours, &j.ActualHours, &j.StartedAt, &j.CompletedAt,
 			&j.InvoiceID, &j.Notes, &j.ScheduledAt,
@@ -179,12 +179,20 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 	}
 	jobNumber := fmt.Sprintf("JOB-%s-%04d", year, seq)
 
+	mileageUnit := "km"
+	if req.VehicleID != nil {
+		_ = s.pool.QueryRow(ctx, `SELECT distance_unit FROM vehicles WHERE id = $1`, *req.VehicleID).Scan(&mileageUnit)
+		if mileageUnit != "mi" {
+			mileageUnit = "km"
+		}
+	}
+
 	var j dto.ServiceJobListResponse
 	err = tx.QueryRow(ctx, `
-		INSERT INTO service_jobs (branch_id, job_number, customer_id, vehicle_id, mileage, description, priority, estimated_hours, discount, notes, created_by, scheduled_at, assigned_to)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, '')::timestamptz, $13)
+		INSERT INTO service_jobs (branch_id, job_number, customer_id, vehicle_id, mileage, mileage_unit, description, priority, estimated_hours, discount, notes, created_by, scheduled_at, assigned_to)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, '')::timestamptz, $14)
 		RETURNING id, branch_id, job_number, status, priority, COALESCE(description,''), created_at, updated_at, created_by`,
-		branchID, jobNumber, req.CustomerID, req.VehicleID, req.Mileage, req.Description, priority, req.EstimatedHours, req.Discount, req.Notes, userID, req.ScheduledAt, req.AssignedTo).
+		branchID, jobNumber, req.CustomerID, req.VehicleID, req.Mileage, mileageUnit, req.Description, priority, req.EstimatedHours, req.Discount, req.Notes, userID, req.ScheduledAt, req.AssignedTo).
 		Scan(&j.ID, &j.BranchID, &j.JobNumber, &j.Status, &j.Priority, &j.Description, &j.CreatedAt, &j.UpdatedAt, &j.CreatedByID)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)

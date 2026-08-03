@@ -72,6 +72,7 @@ type ServiceJobListResponse struct {
 	VehicleID       *int64     `json:"vehicle_id,omitempty"`
 	PlateNumber     string     `json:"plate_number,omitempty"`
 	VehicleInfo     string     `json:"vehicle_info,omitempty"`
+	MileageUnit     string     `json:"mileage_unit"`
 	Description     string     `json:"description"`
 	InvoiceID       *int64     `json:"invoice_id,omitempty"`
 	ScheduledAt     *time.Time `json:"scheduled_at,omitempty"`
@@ -98,6 +99,7 @@ type ServiceJobDetailResponse struct {
 	PlateNumber     string                    `json:"plate_number,omitempty"`
 	VehicleInfo     string                    `json:"vehicle_info,omitempty"`
 	Mileage         *int                      `json:"mileage,omitempty"`
+	MileageUnit     string                    `json:"mileage_unit"`
 	Description     string                    `json:"description"`
 	Diagnosis       string                    `json:"diagnosis,omitempty"`
 	WorkPerformed   string                    `json:"work_performed,omitempty"`

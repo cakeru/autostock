@@ -1,6 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useSettings } from '@/hooks/useSettings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { useQueryClient } from '@tanstack/react-query'
 import { Disc, Plus, Camera, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -41,14 +39,13 @@ const DUE_COLOR: Record<string, PartColor> = {
 // The car as it stands today: the DVI diagram of current tire/part condition,
 // plus the entry points to log a new wheel service or part. Past visits live in
 // the service-history timeline, not here.
-export function CurrentCondition({ vehicleId, bodyType, due }: {
+export function CurrentCondition({ vehicleId, bodyType, due, unit }: {
   vehicleId: number
   bodyType?: string
   due?: DueStatus[]
+  unit: string
 }) {
   const qc = useQueryClient()
-  const { data: settings } = useSettings()
-  const unit = unitLabel(distanceUnit(settings))
   const { data: services } = useWheelServices(vehicleId)
   const { data: tireOptions } = useTireOptions(vehicleId)
   const { data: partStatuses } = usePartStatuses(vehicleId)

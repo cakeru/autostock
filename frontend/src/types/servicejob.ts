@@ -10,6 +10,7 @@ export interface ServiceJob {
   vehicle_id?: number
   plate_number?: string
   vehicle_info?: string
+  mileage_unit?: string
   description: string
   invoice_id?: number
   scheduled_at?: string

@@ -72,25 +72,27 @@ type ActivityItem struct {
 }
 
 type CreateVehicleRequest struct {
-	PlateNumber string `json:"plate_number" binding:"required"`
-	Make        string `json:"make,omitempty"`
-	Model       string `json:"model,omitempty"`
-	Year        *int   `json:"year,omitempty"`
-	VIN         string `json:"vin,omitempty"`
-	Color       string `json:"color,omitempty"`
-	BodyType    string `json:"body_type,omitempty"`
-	Notes       string `json:"notes,omitempty"`
+	PlateNumber  string `json:"plate_number" binding:"required"`
+	Make         string `json:"make,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Year         *int   `json:"year,omitempty"`
+	VIN          string `json:"vin,omitempty"`
+	Color        string `json:"color,omitempty"`
+	BodyType     string `json:"body_type,omitempty"`
+	DistanceUnit string `json:"distance_unit,omitempty" binding:"omitempty,oneof=km mi"`
+	Notes        string `json:"notes,omitempty"`
 }
 
 type UpdateVehicleRequest struct {
-	PlateNumber *string `json:"plate_number,omitempty"`
-	Make        *string `json:"make,omitempty"`
-	Model       *string `json:"model,omitempty"`
-	Year        *int    `json:"year,omitempty"`
-	VIN         *string `json:"vin,omitempty"`
-	Color       *string `json:"color,omitempty"`
-	BodyType    *string `json:"body_type,omitempty"`
-	Notes       *string `json:"notes,omitempty"`
+	PlateNumber  *string `json:"plate_number,omitempty"`
+	Make         *string `json:"make,omitempty"`
+	Model        *string `json:"model,omitempty"`
+	Year         *int    `json:"year,omitempty"`
+	VIN          *string `json:"vin,omitempty"`
+	Color        *string `json:"color,omitempty"`
+	BodyType     *string `json:"body_type,omitempty"`
+	DistanceUnit *string `json:"distance_unit,omitempty" binding:"omitempty,oneof=km mi"`
+	Notes        *string `json:"notes,omitempty"`
 }
 
 type ServiceHistoryItem struct {

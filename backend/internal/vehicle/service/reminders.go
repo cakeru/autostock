@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -351,6 +352,15 @@ func computeDue(in reminderInput, first, last *mileagePoint, fallbackKmPerDay fl
 
 func intPtr(v int) *int { return &v }
 
+// kmToUnit converts a km value (branch defaults are always stored in km) into
+// the vehicle's own unit, so a miles-only car gets the same interval in miles.
+func kmToUnit(km int, unit string) int {
+	if unit == "mi" {
+		return int(math.Round(float64(km) / 1.609344))
+	}
+	return km
+}
+
 func partLabel(r dto.PartRule) string {
 	if r.Label != "" {
 		return r.Label
@@ -410,6 +420,7 @@ func (s *Service) lastPartReplacement(ctx context.Context, vehicleID int64, part
 // falls back to the branch default.
 type vehicleIntervalOverrides struct {
 	oilKm, oilDays, tireKm, tireDays *int
+	unit                             string // "km" | "mi" — the vehicle's own unit
 }
 
 // intPtrIf returns &v when v > 0, else nil — a 0 day/km interval means "no such
@@ -425,6 +436,10 @@ func intPtrIf(v int) *int {
 // (may be "unknown" when un-anchored), plus one per configured part rule that
 // has an actual replacement to anchor on.
 func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64, iv intervalSettings, partRules []dto.PartRule, ovr vehicleIntervalOverrides) ([]reminderInput, error) {
+	unit := ovr.unit
+	if unit != "mi" {
+		unit = "km"
+	}
 	var inputs []reminderInput
 
 	oilMileage, oilAt, oilLifeKm, oilLifeDays, oilLifeMonths, err := s.lastServiceEvent(ctx, branchID, vehicleID, "oil")
@@ -434,9 +449,9 @@ func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64,
 	// The sold oil product's own rating (km / days / months) is most
 	// authoritative; missing pieces fall back to the per-vehicle override, then
 	// the branch default. A product time rating replaces the branch's default.
-	oilKm := iv.oilKm
+	oilKm := kmToUnit(iv.oilKm, unit)
 	if ovr.oilKm != nil {
-		oilKm = *ovr.oilKm
+		oilKm = *ovr.oilKm // per-vehicle override, entered in the vehicle's own unit
 	}
 	if oilLifeKm != nil {
 		oilKm = *oilLifeKm
@@ -467,9 +482,9 @@ func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64,
 	}
 	// km life: the actually-installed tire's own rating is most authoritative,
 	// then the per-vehicle override, then the branch default.
-	life := iv.tireLifeKm
+	life := kmToUnit(iv.tireLifeKm, unit)
 	if ovr.tireKm != nil {
-		life = *ovr.tireKm
+		life = *ovr.tireKm // per-vehicle override, entered in the vehicle's own unit
 	}
 	if tireLifeKm != nil {
 		life = *tireLifeKm
@@ -530,9 +545,9 @@ func (s *Service) GetDueForVehicle(ctx context.Context, branchID, vehicleID int6
 
 	var ovr vehicleIntervalOverrides
 	err = s.pool.QueryRow(ctx,
-		`SELECT oil_interval_km, oil_interval_days, tire_interval_km, tire_interval_days
+		`SELECT oil_interval_km, oil_interval_days, tire_interval_km, tire_interval_days, distance_unit
 		 FROM vehicles WHERE id = $1 AND branch_id = $2`,
-		vehicleID, branchID).Scan(&ovr.oilKm, &ovr.oilDays, &ovr.tireKm, &ovr.tireDays)
+		vehicleID, branchID).Scan(&ovr.oilKm, &ovr.oilDays, &ovr.tireKm, &ovr.tireDays, &ovr.unit)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -551,9 +566,13 @@ func (s *Service) GetDueForVehicle(ctx context.Context, branchID, vehicleID int6
 	}
 
 	now := time.Now()
+	fallback := iv.fallbackKmPerDay
+	if ovr.unit == "mi" {
+		fallback /= 1.609344 // km/day fallback, in the vehicle's unit
+	}
 	out := make([]dto.DueStatus, 0, len(inputs))
 	for _, in := range inputs {
-		out = append(out, computeDue(in, first, last, iv.fallbackKmPerDay, iv.dueSoonDays, now))
+		out = append(out, computeDue(in, first, last, fallback, iv.dueSoonDays, now))
 	}
 	return out, nil
 }
@@ -603,11 +622,12 @@ func (s *Service) ListDueForService(ctx context.Context, branchID int64, horizon
 		err := s.pool.QueryRow(ctx, `
 			SELECT vh.plate_number, COALESCE(vh.make,''), COALESCE(vh.model,''), vh.customer_id,
 			       COALESCE(c.name,''), COALESCE(c.phone,''),
-			       vh.oil_interval_km, vh.oil_interval_days, vh.tire_interval_km, vh.tire_interval_days
+			       vh.oil_interval_km, vh.oil_interval_days, vh.tire_interval_km, vh.tire_interval_days,
+			       vh.distance_unit
 			FROM vehicles vh JOIN customers c ON c.id = vh.customer_id
 			WHERE vh.id = $1 AND vh.branch_id = $2`, vehicleID, branchID).
 			Scan(&plate, &make_, &model, &custID, &custName, &custPhone,
-				&ovr.oilKm, &ovr.oilDays, &ovr.tireKm, &ovr.tireDays)
+				&ovr.oilKm, &ovr.oilDays, &ovr.tireKm, &ovr.tireDays, &ovr.unit)
 		if err != nil {
 			continue
 		}
@@ -621,8 +641,12 @@ func (s *Service) ListDueForService(ctx context.Context, branchID int64, horizon
 		if err != nil {
 			continue
 		}
+		fallback := iv.fallbackKmPerDay
+		if ovr.unit == "mi" {
+			fallback /= 1.609344
+		}
 		for _, in := range inputs {
-			ds := computeDue(in, first, last, iv.fallbackKmPerDay, iv.dueSoonDays, now)
+			ds := computeDue(in, first, last, fallback, iv.dueSoonDays, now)
 			// The list (call sheet) is overdue + due-soon only. The calendar asks
 			// for a forward horizon too, so on-track items with a due date inside
 			// the window are included so the month grid isn't empty.
@@ -632,10 +656,14 @@ func (s *Service) ListDueForService(ctx context.Context, branchID int64, horizon
 				include = true
 			}
 			if include {
+				unit := "km"
+				if ovr.unit == "mi" {
+					unit = "mi"
+				}
 				out = append(out, dto.DueForServiceItem{
 					VehicleID: vehicleID, PlateNumber: plate, Make: make_, Model: model,
 					CustomerID: custID, CustomerName: custName, CustomerPhone: custPhone,
-					DueStatus: ds,
+					DistanceUnit: unit, DueStatus: ds,
 				})
 			}
 		}

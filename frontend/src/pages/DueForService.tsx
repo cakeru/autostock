@@ -6,8 +6,6 @@ import { TableCard, Th } from '@/components/ui/table'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Select } from '@/components/ui/select'
 import { useDueForService } from '@/hooks/useVehicleProfile'
-import { useSettings } from '@/hooks/useSettings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { DueCalendar } from '@/components/vehicle/DueCalendar'
 import { formatDate } from '@/utils/date'
 import type { DueForServiceItem } from '@/types/vehicleProfile'
@@ -23,8 +21,6 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_ORDER: Record<string, number> = { overdue: 0, due_soon: 1 }
 
 export function DueForService() {
-  const { data: settings } = useSettings()
-  const unit = unitLabel(distanceUnit(settings))
   const navigate = useNavigate()
   const [view, setView] = useState<'list' | 'calendar'>('list')
   // The calendar needs upcoming (on-track) dues too, so it asks for a forward

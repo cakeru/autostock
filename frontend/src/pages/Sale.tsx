@@ -55,6 +55,7 @@ export function Sale() {
   const uploadProof = useUploadPaymentProof()
   const createJob = useCreateServiceJob()
 
+  const selectedVehicle = vehicles?.find((v) => String(v.id) === vehicleId)
   const selectCustomer = (id: string) => { setCustomerId(id); setVehicleId(''); setMileage('') }
 
   const products = productsData?.data || []
@@ -334,7 +335,7 @@ export function Sale() {
           )}
           {vehicleId && (
             <div className="mt-2 flex items-center gap-2">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer ({unitLabel(distanceUnit(settings))})</label>
+              <label className="text-xs text-muted-foreground whitespace-nowrap">Odometer ({selectedVehicle?.distance_unit === 'mi' ? 'mi' : 'km'})</label>
               <input
                 value={mileage}
                 onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ''))}

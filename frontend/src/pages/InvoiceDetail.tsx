@@ -18,7 +18,6 @@ import { Select } from '@/components/ui/select'
 import { InvoiceStatusBadge } from '@/components/invoice/StatusBadge'
 import { PrintReceipt, type PrintFormat } from '@/components/invoice/PrintReceipt'
 import { imageSrc } from '@/utils/imageUrl'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import type { RecordPaymentRequest, UpdateInvoiceRequest, UpdateInvoiceItemRequest, InvoiceDetail } from '@/types/invoice'
 import type { Product } from '@/types/product'
 import { parseArraySetting, DEFAULT_PAYMENT_METHODS } from '@/lib/packages'
@@ -266,7 +265,7 @@ export function InvoiceDetail() {
                 </p>
               )
             )}
-            {invoice.mileage != null && <p className="text-sm text-muted-foreground">Odometer: {invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</p>}
+            {invoice.mileage != null && <p className="text-sm text-muted-foreground">Odometer: {invoice.mileage.toLocaleString()} {invoice.mileage_unit === 'mi' ? 'mi' : 'km'}</p>}
             {invoice.job_number && <p className="text-sm text-muted-foreground">Job: {invoice.job_number}</p>}
           </div>
 
@@ -344,7 +343,7 @@ export function InvoiceDetail() {
       {showVehicleEdit && (
         <EditVehicleDialog
           invoice={invoice}
-          unitLabel={unitLabel(distanceUnit(settings))}
+          unitLabel={invoice.mileage_unit === 'mi' ? 'mi' : 'km'}
           onClose={() => setShowVehicleEdit(false)}
           onSave={(data) => updateMutation.mutate(
             { id: invoiceId, data },

@@ -1,6 +1,5 @@
 import type { InvoiceDetail } from '@/types/invoice'
 import type { Settings } from '@/services/settings'
-import { distanceUnit, unitLabel } from '@/utils/units'
 import { BrandMark } from '@/components/layout/BrandMark'
 
 const usd = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -67,7 +66,7 @@ function ThermalReceipt({ invoice, shop, settings }: { invoice: InvoiceDetail; s
         <div className="flex justify-between"><span>Date</span><span>{issuedDate(invoice).toLocaleString()}</span></div>
         {invoice.customer_name && <div className="flex justify-between"><span>Customer</span><span>{invoice.customer_name}</span></div>}
         {invoice.plate_number && <div className="flex justify-between"><span>Vehicle</span><span>{invoice.plate_number}</span></div>}
-        {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</span></div>}
+        {invoice.mileage != null && <div className="flex justify-between"><span>Odometer</span><span>{invoice.mileage.toLocaleString()} {invoice.mileage_unit === 'mi' ? 'mi' : 'km'}</span></div>}
         {invoice.job_number && <div className="flex justify-between"><span>Job</span><span>{invoice.job_number}</span></div>}
       </div>
 
@@ -167,7 +166,7 @@ function ClassicInvoice({ invoice, settings }: { invoice: InvoiceDetail; setting
           <MetaLine kh="កាលបរិច្ឆេទៈ" value={shortDate(issuedDate(invoice))} align="right" />
           <MetaLine kh="អត្រាៈ" value={`$1 = ${Math.round(invoice.exchange_rate).toLocaleString()} ៛`} align="right" />
           <MetaLine kh="ទូរស័ព្ទអតិថិជនៈ" value={invoice.customer_phone} align="right" />
-          <MetaLine kh="គីឡូម៉ែត្រប្រើប្រាស់ៈ" value={invoice.mileage != null ? `${invoice.mileage.toLocaleString()} ${unitLabel(distanceUnit(settings))}` : undefined} align="right" />
+          <MetaLine kh="គីឡូម៉ែត្រប្រើប្រាស់ៈ" value={invoice.mileage != null ? `${invoice.mileage.toLocaleString()} ${invoice.mileage_unit === 'mi' ? 'mi' : 'km'}` : undefined} align="right" />
         </div>
       </div>
 
@@ -277,7 +276,7 @@ function InvoiceA4({ invoice, shop, settings, capture }: { invoice: InvoiceDetai
                 {invoice.vehicle_info}{invoice.plate_number ? ` · ${invoice.plate_number}` : ''}
               </p>
             )}
-            {invoice.mileage != null && <p className="text-black/70">Odometer: {invoice.mileage.toLocaleString()} {unitLabel(distanceUnit(settings))}</p>}
+            {invoice.mileage != null && <p className="text-black/70">Odometer: {invoice.mileage.toLocaleString()} {invoice.mileage_unit === 'mi' ? 'mi' : 'km'}</p>}
             {invoice.job_number && <p className="text-black/70">Job: {invoice.job_number}</p>}
           </div>
           <div className="text-right">
