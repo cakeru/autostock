@@ -512,7 +512,13 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 	if req.ClearVehicle {
 		newVehicleID = nil
 	}
-	vehicleChanged := oldVehicleID == nil || newVehicleID == nil || *oldVehicleID != *newVehicleID
+	// Only re-sync service events when the request actually touches the
+	// vehicle — a notes/customer-only update must not drop the invoice's
+	// logged oil/tire history.
+	vehicleChanged := false
+	if req.VehicleID != nil || req.ClearVehicle {
+		vehicleChanged = oldVehicleID == nil || newVehicleID == nil || *oldVehicleID != *newVehicleID
+	}
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -527,7 +533,7 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		    notes = COALESCE($3, notes),
 		    vehicle_id = CASE WHEN $6 THEN NULL ELSE COALESCE($4, vehicle_id) END,
 		    mileage = COALESCE($5, mileage),
-		    customer_id = CASE WHEN $9 IS NULL THEN customer_id WHEN $9 = 0 THEN NULL ELSE $9 END,
+		    customer_id = CASE WHEN $9::bigint IS NULL THEN customer_id WHEN $9::bigint = 0 THEN NULL ELSE $9::bigint END,
 		    updated_at = NOW()
 		WHERE id = $7 AND branch_id = $8`,
 		req.PaymentMethod, req.PaymentNotes, req.Notes, req.VehicleID, req.Mileage,
