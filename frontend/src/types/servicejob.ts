@@ -53,6 +53,7 @@ export interface JobItemInput {
   description?: string
   quantity: number
   unit_price: number
+  vehicle_event_type?: 'service'
 }
 
 export interface ServiceJobListParams {
@@ -99,4 +100,5 @@ export interface AddItemRequest {
   description?: string
   quantity: number
   unit_price: number
+  vehicle_event_type?: 'service'
 }

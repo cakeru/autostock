@@ -204,9 +204,9 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 	for _, it := range req.Items {
 		itemType := normalizeItemType(it.ItemType, it.ProductID)
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO service_job_items (service_job_id, product_id, item_type, description, quantity, unit_price, total_price)
-			VALUES ($1, $2, $3, $4, $5, $6, $5::numeric * $6::numeric)`,
-			j.ID, it.ProductID, itemType, it.Description, it.Quantity, it.UnitPrice); err != nil {
+			INSERT INTO service_job_items (service_job_id, product_id, item_type, description, quantity, unit_price, total_price, vehicle_event_type)
+			VALUES ($1, $2, $3, $4, $5, $6, $5::numeric * $6::numeric, $7)`,
+			j.ID, it.ProductID, itemType, it.Description, it.Quantity, it.UnitPrice, it.VehicleEventType); err != nil {
 			return nil, fmt.Errorf("add job item: %w", err)
 		}
 		if itemType == "product" && it.ProductID != nil {
@@ -452,14 +452,14 @@ func (s *Service) AddItem(ctx context.Context, branchID int64, jobID int64, req 
 	var item dto.ServiceJobItemResponse
 	err = tx.QueryRow(ctx, `
 		WITH ins AS (
-			INSERT INTO service_job_items (service_job_id, product_id, item_type, description, quantity, unit_price, total_price)
-			VALUES ($1, $2, $3, $4, $5, $6, $5::numeric * $6::numeric)
+			INSERT INTO service_job_items (service_job_id, product_id, item_type, description, quantity, unit_price, total_price, vehicle_event_type)
+			VALUES ($1, $2, $3, $4, $5, $6, $5::numeric * $6::numeric, $7)
 			RETURNING id, product_id, item_type, description, quantity, unit_price, total_price
 		)
 		SELECT ins.id, ins.product_id, ins.item_type, COALESCE(p.name, ''),
 		       COALESCE(ins.description, ''), ins.quantity, ins.unit_price, ins.total_price
 		FROM ins LEFT JOIN products p ON p.id = ins.product_id`,
-		jobID, req.ProductID, itemType, req.Description, req.Quantity, req.UnitPrice).
+		jobID, req.ProductID, itemType, req.Description, req.Quantity, req.UnitPrice, req.VehicleEventType).
 		Scan(&item.ID, &item.ProductID, &item.ItemType, &item.ProductName, &item.Description,
 			&item.Quantity, &item.UnitPrice, &item.TotalPrice)
 	if err != nil {

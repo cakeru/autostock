@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"time"
@@ -282,9 +283,9 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 			desc = item.ItemType
 		}
 		_, err := tx.Exec(ctx, `
-			INSERT INTO invoice_items (invoice_id, product_id, item_type, description, quantity, unit_price_usd, total_usd)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			inv.ID, item.ProductID, item.ItemType, desc, item.Quantity, item.UnitPriceUSD, item.Quantity*item.UnitPriceUSD)
+			INSERT INTO invoice_items (invoice_id, product_id, item_type, description, quantity, unit_price_usd, total_usd, vehicle_event_type)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			inv.ID, item.ProductID, item.ItemType, desc, item.Quantity, item.UnitPriceUSD, item.Quantity*item.UnitPriceUSD, item.VehicleEventType)
 		if err != nil {
 			return nil, fmt.Errorf("add invoice item: %w", err)
 		}
@@ -370,6 +371,22 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 				return nil, err
 			}
 		}
+		// Labor-only services (wheel balancing, alignment, rotation, ...) marked
+		// on the line are logged as a generic "service" event — one per distinct
+		// description, so an invoice can carry several services.
+		var serviceNames []string
+		seenService := map[string]bool{}
+		for _, item := range req.Items {
+			if item.VehicleEventType != nil && *item.VehicleEventType == "service" && item.Description != "" && !seenService[item.Description] {
+				seenService[item.Description] = true
+				serviceNames = append(serviceNames, item.Description)
+			}
+		}
+		for _, name := range serviceNames {
+			if err := vehicleevent.LogEvent(ctx, tx, branchID, *req.VehicleID, "service", req.Mileage, occurredAt, &inv.ID, req.ServiceJobID, name, nil, nil, nil, &userID); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	var customerName string
@@ -427,7 +444,7 @@ func (s *Service) CreateFromServiceJob(ctx context.Context, branchID int64, user
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT sji.product_id, sji.item_type, COALESCE(sji.description, ''), sji.quantity, sji.unit_price
+		SELECT sji.product_id, sji.item_type, COALESCE(sji.description, ''), sji.quantity, sji.unit_price, sji.vehicle_event_type
 		FROM service_job_items sji
 		WHERE sji.service_job_id = $1`, jobID)
 	if err != nil {
@@ -438,8 +455,13 @@ func (s *Service) CreateFromServiceJob(ctx context.Context, branchID int64, user
 	var items []dto.InvoiceItemReq
 	for rows.Next() {
 		var item dto.InvoiceItemReq
-		if err := rows.Scan(&item.ProductID, &item.ItemType, &item.Description, &item.Quantity, &item.UnitPriceUSD); err != nil {
+		var evType sql.NullString
+		if err := rows.Scan(&item.ProductID, &item.ItemType, &item.Description, &item.Quantity, &item.UnitPriceUSD, &evType); err != nil {
 			return nil, fmt.Errorf("scan job item: %w", err)
+		}
+		if evType.Valid {
+			ev := evType.String
+			item.VehicleEventType = &ev
 		}
 		items = append(items, item)
 	}
@@ -544,10 +566,11 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 // gets its due-for-service history. Idempotent per (vehicle, type, invoice).
 func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, vehicleID, invoiceID int64, mileage *int, occurredAt time.Time) error {
 	rows, err := tx.Query(ctx, `
-		SELECT p.type, p.is_oil_product, p.name, p.life_km, p.life_days, p.life_months
+		SELECT COALESCE(p.type, ''), COALESCE(p.is_oil_product, false), COALESCE(p.name, ''),
+		       COALESCE(ii.description, ''), p.life_km, p.life_days, p.life_months, ii.vehicle_event_type
 		FROM invoice_items ii
-		JOIN products p ON p.id = ii.product_id
-		WHERE ii.invoice_id = $1 AND ii.product_id IS NOT NULL`, invoiceID)
+		LEFT JOIN products p ON p.id = ii.product_id
+		WHERE ii.invoice_id = $1`, invoiceID)
 	if err != nil {
 		return fmt.Errorf("query invoice products: %w", err)
 	}
@@ -562,12 +585,15 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 	var tireName, oilName string
 	var tireLifeKm, tireLifeDays, tireLifeMonths *int
 	var oilLifeKm, oilLifeDays, oilLifeMonths *int
+	var serviceNames []string
+	seenService := map[string]bool{}
 	for rows.Next() {
 		var ptype string
 		var isOil bool
-		var name string
+		var name, desc string
 		var km, days, months *int
-		if err := rows.Scan(&ptype, &isOil, &name, &km, &days, &months); err != nil {
+		var evType *string
+		if err := rows.Scan(&ptype, &isOil, &name, &desc, &km, &days, &months, &evType); err != nil {
 			return fmt.Errorf("scan invoice product: %w", err)
 		}
 		km = kmToVehicleUnit(km, vehicleUnit)
@@ -578,6 +604,10 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 		if isOil && oilName == "" {
 			oilName = name
 			oilLifeKm, oilLifeDays, oilLifeMonths = km, days, months
+		}
+		if evType != nil && *evType == "service" && desc != "" && !seenService[desc] {
+			seenService[desc] = true
+			serviceNames = append(serviceNames, desc)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -592,6 +622,11 @@ func (s *Service) logVehicleEvents(ctx context.Context, tx pgx.Tx, branchID, veh
 	}
 	if oilName != "" {
 		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "oil", mileage, occurredAt, &invID, nil, oilName, oilLifeKm, oilLifeDays, oilLifeMonths, nil); err != nil {
+			return err
+		}
+	}
+	for _, name := range serviceNames {
+		if err := vehicleevent.LogEvent(ctx, tx, branchID, vehicleID, "service", mileage, occurredAt, &invID, nil, name, nil, nil, nil, nil); err != nil {
 			return err
 		}
 	}
@@ -846,10 +881,10 @@ func (s *Service) AddItem(ctx context.Context, branchID int64, userID int64, inv
 
 	var item dto.InvoiceItemResp
 	err = tx.QueryRow(ctx, `
-		INSERT INTO invoice_items (invoice_id, product_id, item_type, description, quantity, unit_price_usd, total_usd)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO invoice_items (invoice_id, product_id, item_type, description, quantity, unit_price_usd, total_usd, vehicle_event_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, product_id, item_type, description, quantity, unit_price_usd, total_usd`,
-		invoiceID, req.ProductID, req.ItemType, desc, req.Quantity, req.UnitPriceUSD, req.Quantity*req.UnitPriceUSD).
+		invoiceID, req.ProductID, req.ItemType, desc, req.Quantity, req.UnitPriceUSD, req.Quantity*req.UnitPriceUSD, req.VehicleEventType).
 		Scan(&item.ID, &item.ProductID, &item.ItemType, &item.Description,
 			&item.Quantity, &item.UnitPriceUSD, &item.TotalUSD)
 	if err != nil {

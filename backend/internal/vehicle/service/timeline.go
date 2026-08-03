@@ -170,6 +170,8 @@ func (s *Service) buildTimeline(ctx context.Context, branchID, vehicleID int64, 
 						id := e.ID
 						v.TireEventID = &id
 					}
+				} else if e.EventType == "service" {
+					v.Services = append(v.Services, dto.VisitService{ID: e.ID, Name: e.ProductName})
 				}
 			case kPart:
 				v.Parts = append(v.Parts, parts[it.idx])
@@ -206,7 +208,7 @@ func (s *Service) buildTimeline(ctx context.Context, branchID, vehicleID int64, 
 		v.Mileage = mileage
 		// In the customer view a cluster can end up empty once prices, internal
 		// notes and unshared photos are stripped (e.g. a sale-only day) — skip it.
-		if publicOnly && v.WheelService == nil && !v.OilChange && !v.TireChange && len(v.Parts) == 0 && len(v.Photos) == 0 {
+		if publicOnly && v.WheelService == nil && !v.OilChange && !v.TireChange && len(v.Services) == 0 && len(v.Parts) == 0 && len(v.Photos) == 0 {
 			cur = nil
 			return
 		}

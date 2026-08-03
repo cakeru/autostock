@@ -20,6 +20,7 @@ export interface CartLine {
   unit?: string
   product_type?: 'tire' | 'part' | 'consumable' | 'labor' // set on product lines
   is_oil_product?: boolean // drives the auto-logged oil-change record
+  vehicle_event?: 'service' // labor line to auto-log on the car (balancing, alignment, …)
   discountRaw?: string // per-line discount as typed: "10%" or "5" ($ off the line)
 }
 
@@ -40,6 +41,7 @@ export interface PackageAddon {
   item_type: 'labor' | 'fee'
   unit_price_usd: number
   per_tire: boolean // multiply by the chosen tire quantity
+  vehicle_event?: 'service' // auto-log this labor on the car's record
 }
 
 export interface SalePackage {
@@ -57,8 +59,8 @@ export const PACKAGES: SalePackage[] = [
     blurb: 'Tire + mount, balance, valve & disposal',
     tireType: 'passenger',
     addons: [
-      { description: 'Tire mounting', item_type: 'labor', unit_price_usd: 15, per_tire: true },
-      { description: 'Wheel balancing', item_type: 'labor', unit_price_usd: 10, per_tire: true },
+      { description: 'Tire mounting', item_type: 'labor', unit_price_usd: 15, per_tire: true, vehicle_event: 'service' },
+      { description: 'Wheel balancing', item_type: 'labor', unit_price_usd: 10, per_tire: true, vehicle_event: 'service' },
       { description: 'New valve stem', item_type: 'labor', unit_price_usd: 3, per_tire: true },
       { description: 'Tire disposal fee', item_type: 'fee', unit_price_usd: 2, per_tire: true },
     ],
@@ -69,8 +71,8 @@ export const PACKAGES: SalePackage[] = [
     blurb: 'Truck/SUV tire + fitting & disposal',
     tireType: 'truck',
     addons: [
-      { description: 'Tire mounting (truck)', item_type: 'labor', unit_price_usd: 20, per_tire: true },
-      { description: 'Wheel balancing', item_type: 'labor', unit_price_usd: 12, per_tire: true },
+      { description: 'Tire mounting (truck)', item_type: 'labor', unit_price_usd: 20, per_tire: true, vehicle_event: 'service' },
+      { description: 'Wheel balancing', item_type: 'labor', unit_price_usd: 12, per_tire: true, vehicle_event: 'service' },
       { description: 'New valve stem', item_type: 'labor', unit_price_usd: 3, per_tire: true },
       { description: 'Tire disposal fee', item_type: 'fee', unit_price_usd: 3, per_tire: true },
     ],
@@ -80,6 +82,7 @@ export const PACKAGES: SalePackage[] = [
 export interface Preset {
   description: string
   unit_price_usd: number
+  vehicle_event?: 'service' // labor presets with this are auto-logged on the car
 }
 
 export const DEFAULT_PAYMENT_METHODS = ['cash', 'card', 'transfer']
@@ -97,11 +100,11 @@ export function parseArraySetting<T>(raw: string | undefined, fallback: T[]): T[
 }
 
 export const LABOR_PRESETS: Preset[] = [
-  { description: 'Tire mounting', unit_price_usd: 15 },
-  { description: 'Wheel balancing', unit_price_usd: 10 },
-  { description: 'Wheel alignment', unit_price_usd: 35 },
-  { description: 'Tire rotation', unit_price_usd: 10 },
-  { description: 'Flat repair', unit_price_usd: 8 },
+  { description: 'Tire mounting', unit_price_usd: 15, vehicle_event: 'service' },
+  { description: 'Wheel balancing', unit_price_usd: 10, vehicle_event: 'service' },
+  { description: 'Wheel alignment', unit_price_usd: 35, vehicle_event: 'service' },
+  { description: 'Tire rotation', unit_price_usd: 10, vehicle_event: 'service' },
+  { description: 'Flat repair', unit_price_usd: 8, vehicle_event: 'service' },
 ]
 
 export const FEE_PRESETS: { description: string; unit_price_usd: number }[] = [

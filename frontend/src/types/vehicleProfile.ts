@@ -280,6 +280,7 @@ export interface Visit {
   tire_change?: boolean
   tire_note?: string
   tire_event_id?: number
+  services?: { id: number; name: string }[]
   installs?: VisitInstall[]
   parts?: VehiclePart[]
   notes?: string[]

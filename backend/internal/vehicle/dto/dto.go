@@ -85,7 +85,7 @@ type ServiceEventResponse struct {
 }
 
 type CreateServiceEventRequest struct {
-	EventType   string `json:"event_type" binding:"required,oneof=oil tire"`
+	EventType   string `json:"event_type" binding:"required,oneof=oil tire service"`
 	Mileage     *int   `json:"mileage,omitempty"`
 	OccurredAt  string `json:"occurred_at,omitempty"` // YYYY-MM-DD; defaults to today
 	ProductName string `json:"product_name,omitempty"`
@@ -290,11 +290,17 @@ type VisitResponse struct {
 	TireChange   bool                  `json:"tire_change,omitempty"`   // a tire install logged without per-corner detail
 	TireNote     string                `json:"tire_note,omitempty"`
 	TireEventID  *int64                `json:"tire_event_id,omitempty"` // internal only
+	Services     []VisitService        `json:"services,omitempty"`      // labor services auto-logged from invoices (balancing, alignment, …)
 	Installs     []VisitInstall        `json:"installs,omitempty"`
 	Parts        []PartResponse        `json:"parts,omitempty"`
 	Notes        []string              `json:"notes,omitempty"`
 	Transactions []VisitTxn            `json:"transactions,omitempty"`
 	Photos       []VisitPhoto          `json:"photos,omitempty"`
+}
+
+type VisitService struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type UpdateGalleryPhotoRequest struct {

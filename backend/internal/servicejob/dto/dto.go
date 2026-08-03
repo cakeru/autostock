@@ -30,11 +30,12 @@ type CreateServiceJobRequest struct {
 
 // JobItemInput is a line added when creating a job (e.g. from a saved POS cart).
 type JobItemInput struct {
-	ProductID   *int64  `json:"product_id,omitempty"`
-	ItemType    string  `json:"item_type,omitempty"` // product | labor | fee | custom
-	Description string  `json:"description,omitempty"`
-	Quantity    float64 `json:"quantity" binding:"required,gt=0"`
-	UnitPrice   float64 `json:"unit_price" binding:"gte=0"`
+	ProductID        *int64  `json:"product_id,omitempty"`
+	ItemType         string  `json:"item_type,omitempty"` // product | labor | fee | custom
+	Description      string  `json:"description,omitempty"`
+	Quantity         float64 `json:"quantity" binding:"required,gt=0"`
+	UnitPrice        float64 `json:"unit_price" binding:"gte=0"`
+	VehicleEventType *string `json:"vehicle_event_type,omitempty" binding:"omitempty,oneof=service"`
 }
 
 type UpdateServiceJobRequest struct {
@@ -53,11 +54,12 @@ type UpdateServiceJobRequest struct {
 }
 
 type AddItemRequest struct {
-	ProductID   *int64  `json:"product_id,omitempty"`
-	ItemType    string  `json:"item_type,omitempty"` // product | labor | fee | custom
-	Description string  `json:"description,omitempty"`
-	Quantity    float64 `json:"quantity" binding:"required,gt=0"`
-	UnitPrice   float64 `json:"unit_price" binding:"gte=0"`
+	ProductID        *int64  `json:"product_id,omitempty"`
+	ItemType         string  `json:"item_type,omitempty"` // product | labor | fee | custom
+	Description      string  `json:"description,omitempty"`
+	Quantity         float64 `json:"quantity" binding:"required,gt=0"`
+	UnitPrice        float64 `json:"unit_price" binding:"gte=0"`
+	VehicleEventType *string `json:"vehicle_event_type,omitempty" binding:"omitempty,oneof=service"`
 }
 
 type ServiceJobListResponse struct {

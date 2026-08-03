@@ -23,7 +23,7 @@ func LogEvent(ctx context.Context, tx pgx.Tx, branchID, vehicleID int64, eventTy
 	_, err := tx.Exec(ctx, `
 		INSERT INTO vehicle_service_events (branch_id, vehicle_id, event_type, mileage, occurred_at, invoice_id, service_job_id, product_name, life_km, life_days, life_months, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, $11, $12)
-		ON CONFLICT (vehicle_id, event_type, invoice_id) WHERE invoice_id IS NOT NULL DO NOTHING`,
+		ON CONFLICT (vehicle_id, event_type, invoice_id, product_name) WHERE invoice_id IS NOT NULL DO NOTHING`,
 		branchID, vehicleID, eventType, mileage, occurredAt, invoiceID, serviceJobID, productName, lifeKm, lifeDays, lifeMonths, createdBy)
 	if err != nil {
 		return fmt.Errorf("log vehicle service event: %w", err)

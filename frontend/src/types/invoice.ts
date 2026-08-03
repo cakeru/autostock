@@ -79,6 +79,7 @@ export interface CreateInvoiceItemRequest {
   description: string
   quantity: number
   unit_price_usd: number
+  vehicle_event_type?: 'service'
 }
 
 export interface UpdateInvoiceRequest {

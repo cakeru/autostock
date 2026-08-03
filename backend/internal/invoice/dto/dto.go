@@ -27,11 +27,12 @@ type CreateInvoiceRequest struct {
 }
 
 type InvoiceItemReq struct {
-	ProductID    *int64  `json:"product_id,omitempty"`
-	ItemType     string  `json:"item_type" binding:"required,oneof=product labor custom fee"`
-	Description  string  `json:"description"`
-	Quantity     float64 `json:"quantity" binding:"required,gt=0"`
-	UnitPriceUSD float64 `json:"unit_price_usd" binding:"required,gte=0"`
+	ProductID        *int64  `json:"product_id,omitempty"`
+	ItemType         string  `json:"item_type" binding:"required,oneof=product labor custom fee"`
+	Description      string  `json:"description"`
+	Quantity         float64 `json:"quantity" binding:"required,gt=0"`
+	UnitPriceUSD     float64 `json:"unit_price_usd" binding:"required,gte=0"`
+	VehicleEventType *string `json:"vehicle_event_type,omitempty" binding:"omitempty,oneof=service"`
 }
 
 type UpdateInvoiceItemRequest struct {

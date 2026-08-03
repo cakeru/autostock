@@ -316,11 +316,12 @@ export function Settings() {
 
       <PresetsEditor
         title="Labor Presets"
-        description="Quick-add labor buttons on the New Sale screen. Prices stay editable in the cart."
+        description="Quick-add labor buttons on the New Sale screen. Mark 'Log as service' to auto-record the work on the customer's vehicle when the sale has one."
         settingKey="labor_presets"
         initial={settings?.labor_presets}
         defaults={LABOR_PRESETS}
         addLabel="Add labor"
+        withVehicleEvent
       />
 
       <PresetsEditor
@@ -390,6 +391,15 @@ function PackagesEditor({ initial }: { initial?: string }) {
                   <Select value={a.item_type} onChange={(e) => updateAddon(pi, ai, { item_type: e.target.value })} className="w-28">
                     <option value="labor">Labor</option>
                     <option value="fee">Fee</option>
+                  </Select>
+                  <Select
+                    title="Auto-log on the vehicle record"
+                    value={a.vehicle_event || ''}
+                    onChange={(e) => updateAddon(pi, ai, { vehicle_event: (e.target.value || undefined) as 'service' | undefined })}
+                    className="w-36"
+                  >
+                    <option value="">No vehicle record</option>
+                    <option value="service">Log as service</option>
                   </Select>
                   <div className="flex items-center rounded-md border px-2">
                     <span className="text-xs text-muted-foreground">$</span>
@@ -547,13 +557,14 @@ function ServiceIntervalsEditor() {
   )
 }
 
-function PresetsEditor({ title, description, settingKey, initial, defaults, addLabel }: {
+function PresetsEditor({ title, description, settingKey, initial, defaults, addLabel, withVehicleEvent }: {
   title: string
   description: string
   settingKey: string
   initial?: string
   defaults: Preset[]
   addLabel: string
+  withVehicleEvent?: boolean
 }) {
   const save = useUpdateSetting()
   const saved = useSavedTimeout()
@@ -578,6 +589,17 @@ function PresetsEditor({ title, description, settingKey, initial, defaults, addL
                 onChange={(e) => update(i, { unit_price_usd: parseFloat(e.target.value) || 0 })}
                 className="w-20 bg-transparent py-1.5 text-sm tabular-nums focus:outline-none" />
             </div>
+            {withVehicleEvent && (
+              <Select
+                title="Auto-log on the vehicle record"
+                value={r.vehicle_event || ''}
+                onChange={(e) => update(i, { vehicle_event: (e.target.value || undefined) as 'service' | undefined })}
+                className="w-36"
+              >
+                <option value="">No vehicle record</option>
+                <option value="service">Log as service</option>
+              </Select>
+            )}
             <Button variant="ghost" size="icon" className="hover:text-destructive" onClick={() => remove(i)} aria-label="Remove"><Trash2 className="h-4 w-4" /></Button>
           </div>
         ))}

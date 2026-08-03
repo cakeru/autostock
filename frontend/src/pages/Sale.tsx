@@ -113,13 +113,13 @@ export function Sale() {
       return [...c, { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: 1, unit_price_usd: p.sell_price, image_url: p.image_url, is_bulk: p.is_bulk, unit: p.unit, product_type: p.type, is_oil_product: p.is_oil_product }]
     })
   }
-  const addLine = (description: string, unit_price_usd: number, item_type: CartLine['item_type']) => {
-    setCart((c) => [...c, { key: nextKey(), item_type, description, quantity: 1, unit_price_usd }])
+  const addLine = (description: string, unit_price_usd: number, item_type: CartLine['item_type'], vehicle_event?: 'service') => {
+    setCart((c) => [...c, { key: nextKey(), item_type, description, quantity: 1, unit_price_usd, vehicle_event }])
   }
   const addPackage = (p: Product, qty: number, sp: SalePackage) => {
     const lines: CartLine[] = [
       { key: nextKey(), product_id: p.id, item_type: 'product', description: p.name, quantity: qty, unit_price_usd: p.sell_price, image_url: p.image_url, product_type: p.type, is_oil_product: p.is_oil_product },
-      ...sp.addons.map((a) => ({ key: nextKey(), item_type: a.item_type, description: a.description, quantity: a.per_tire ? qty : 1, unit_price_usd: a.unit_price_usd })),
+      ...sp.addons.map((a) => ({ key: nextKey(), item_type: a.item_type, description: a.description, quantity: a.per_tire ? qty : 1, unit_price_usd: a.unit_price_usd, vehicle_event: a.vehicle_event })),
     ]
     setCart((c) => [...c, ...lines])
     setPkg(null)
@@ -168,7 +168,7 @@ export function Sale() {
         description: desc,
         discount: discountAmount || undefined,
         notes: discountAmount > 0 ? `Discount discussed: ${discReason || 'negotiated'}` : undefined,
-        items: cart.map((l) => ({ product_id: l.product_id, item_type: l.item_type, description: l.description, quantity: l.quantity, unit_price: l.unit_price_usd })),
+        items: cart.map((l) => ({ product_id: l.product_id, item_type: l.item_type, description: l.description, quantity: l.quantity, unit_price: l.unit_price_usd, vehicle_event_type: l.vehicle_event })),
       })
       navigate(`/service-jobs/${job.id}`)
     } catch { /* surfaced by global onError toast */ }
@@ -180,7 +180,7 @@ export function Sale() {
         customer_id: customerId ? parseInt(customerId) : undefined,
         vehicle_id: vehicleId ? parseInt(vehicleId) : undefined,
         mileage: mileageValue(),
-        items: cart.map((l) => ({ product_id: l.product_id, item_type: l.item_type, description: l.description, quantity: l.quantity, unit_price_usd: l.unit_price_usd })),
+        items: cart.map((l) => ({ product_id: l.product_id, item_type: l.item_type, description: l.description, quantity: l.quantity, unit_price_usd: l.unit_price_usd, vehicle_event_type: l.vehicle_event })),
         discount: discountAmount || undefined,
         exchange_rate: rate,
         notes: discountAmount > 0 ? `Discount: ${discReason || 'negotiated'}` : undefined,
@@ -292,7 +292,7 @@ export function Sale() {
           {tab === 'labor' && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {laborPresets.map((l) => (
-                <button key={l.description} onClick={() => addLine(l.description, l.unit_price_usd, 'labor')} className="flex items-center justify-between rounded-lg bg-card p-4 text-left text-sm shadow-sm transition-shadow hover:shadow-md">
+                <button key={l.description} onClick={() => addLine(l.description, l.unit_price_usd, 'labor', l.vehicle_event)} className="flex items-center justify-between rounded-lg bg-card p-4 text-left text-sm shadow-sm transition-shadow hover:shadow-md">
                   <span className="font-medium">{l.description}</span>
                   <span className="tabular-nums text-muted-foreground">{formatUSD(l.unit_price_usd)}</span>
                 </button>
