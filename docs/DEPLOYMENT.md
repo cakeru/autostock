@@ -7,6 +7,41 @@ AutoStock can be deployed in multiple ways depending on your needs:
 2. **Split Deployment** - Frontend on Vercel, backend + DB on VPS
 3. **Manual Deployment** - Direct binary deployment without Docker
 
+## Deploying on a Mac Mini (Apple Silicon)
+
+This is the setup when the shop's server is a Mac Mini M4 instead of a Linux
+VPS. Everything below still applies, with these differences:
+
+- **No Coolify.** Coolify is a Linux-only control panel; on macOS run the plain
+  `docker-compose.yml` with Docker Desktop (or OrbStack). The Settings →
+  **"Update now"** button (the `updater` container) is your update path.
+- **Keep the repo under your home folder.** Docker Desktop only shares paths
+  under `$HOME` (and `/tmp`) into the Docker VM. Clone to e.g.
+  `~/autostock` — a repo in `/opt` or `/srv` will fail with "Mounts denied".
+- **The Docker socket lives at a per-user path.** Docker Desktop for Mac keeps
+  it at `~/.docker/run/docker.sock` (not `/var/run/docker.sock`). In `.env` set
+  the literal path:
+  ```bash
+  REPO_DIR=/Users/yourname/autostock
+  DOCKER_SOCKET=/Users/yourname/.docker/run/docker.sock
+  BACKUP_DIR=/Users/yourname/autostock/backups
+  ```
+  (Alternatively enable "Allow the default Docker socket to be used" in Docker
+  Desktop settings and leave `DOCKER_SOCKET` unset.)
+- **Arm64 images build natively** on the M4 — no emulation. The frontend build
+  already avoids x64-only packages.
+- **Docker must be running** for the stack to start: enable "Start Docker
+  Desktop when you sign in", and log into the Mac once after a reboot. The
+  containers use `restart: unless-stopped`, so they come back automatically
+  once Docker Desktop is up.
+- **Shop access:** the frontend listens on `0.0.0.0:3000`, so staff can reach
+  the app from other devices at `http://<mac-ip>:3000` on the shop LAN. The
+  backend (8080) and Postgres (5433) stay bound to localhost.
+
+Otherwise follow Option 1 below: copy `.env.example` → `.env` with a strong
+`DB_PASSWORD` and a 32+ char `JWT_SECRET`, run `docker compose up -d --build`,
+log in with `admin` / `admin123`, and change the password immediately.
+
 ## Prerequisites
 
 - **Domain name** (optional but recommended)

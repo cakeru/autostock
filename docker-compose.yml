@@ -105,9 +105,18 @@ services:
     restart: unless-stopped
     environment:
       UPDATER_PORT: "8081"
+      # Mount target and deploy.sh working dir. Set REPO_DIR to the repo's
+      # absolute host path so the deploy resolves ./backups and build contexts
+      # against the same path the Docker daemon sees (required on Docker
+      # Desktop for Mac; recommended everywhere).
+      REPO_PATH: ${REPO_DIR:-/repo}
     volumes:
-      - ${REPO_DIR:-.}:/repo
-      - /var/run/docker.sock:/var/run/docker.sock
+      # With REPO_DIR set, the repo is mounted at the same path it has on the
+      # host; otherwise the default ./:/repo keeps local dev unchanged.
+      - ${REPO_DIR:-.}:${REPO_DIR:-/repo}
+      # Docker Desktop for Mac keeps the socket at ~/.docker/run/docker.sock;
+      # set DOCKER_SOCKET to that path (or enable the "default socket" setting).
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on:
       - backend
 
