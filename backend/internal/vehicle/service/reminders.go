@@ -446,6 +446,18 @@ func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64,
 	if err != nil {
 		return nil, err
 	}
+	// With no logged oil change, a per-vehicle override is still the shop's way
+	// to set the NEXT service: anchor the projection on the car's current
+	// odometer and today, so due = now + days / current km + interval.
+	if oilMileage == nil && (ovr.oilKm != nil || ovr.oilDays != nil) {
+		if _, last, err := s.mileageHistoryBounds(ctx, vehicleID); err == nil && last != nil {
+			oilMileage = &last.mileage
+		}
+		if oilAt == nil {
+			t := time.Now()
+			oilAt = &t
+		}
+	}
 	// The sold oil product's own rating (km / days / months) is most
 	// authoritative; missing pieces fall back to the per-vehicle override, then
 	// the branch default. A product time rating replaces the branch's default.
@@ -479,6 +491,15 @@ func (s *Service) reminderInputs(ctx context.Context, branchID, vehicleID int64,
 	tireMileage, tireAt, tireLifeKm, tireLifeDays, tireLifeMonths, err := s.lastTireEvent(ctx, branchID, vehicleID)
 	if err != nil {
 		return nil, err
+	}
+	if tireMileage == nil && (ovr.tireKm != nil || ovr.tireDays != nil) {
+		if _, last, err := s.mileageHistoryBounds(ctx, vehicleID); err == nil && last != nil {
+			tireMileage = &last.mileage
+		}
+		if tireAt == nil {
+			t := time.Now()
+			tireAt = &t
+		}
 	}
 	// km life: the actually-installed tire's own rating is most authoritative,
 	// then the per-vehicle override, then the branch default.
