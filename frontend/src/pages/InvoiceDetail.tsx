@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/select'
 import { InvoiceStatusBadge } from '@/components/invoice/StatusBadge'
 import { PrintReceipt, type PrintFormat } from '@/components/invoice/PrintReceipt'
 import { imageSrc } from '@/utils/imageUrl'
+import { compressImage } from '@/utils/compressImage'
 import type { RecordPaymentRequest, UpdateInvoiceRequest, UpdateInvoiceItemRequest, InvoiceDetail, Payment } from '@/types/invoice'
 import type { Product } from '@/types/product'
 import { parseArraySetting, DEFAULT_PAYMENT_METHODS } from '@/lib/packages'
@@ -573,7 +574,10 @@ function RecordPaymentDialog({ invoiceId, invoiceNumber, owed, rate, methods, on
                     </Button>
                   )}
                 </div>
-                <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={(e) => setProof(e.target.files?.[0] || null)} />
+                <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0] || null
+                  setProof(f ? await compressImage(f) : null)
+                }} />
               </div>
             </>
           )}

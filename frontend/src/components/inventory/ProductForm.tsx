@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { imageSrc } from '@/utils/imageUrl'
 import { kmToMi, miToKm } from '@/utils/units'
+import { compressImage } from '@/utils/compressImage'
 import type { CreateProductRequest } from '@/types/product'
 
 export interface ProductImageIntent {
@@ -59,10 +60,11 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
   const existingImage = !removeImage && !pendingFile ? imageSrc(initial?.image_url) : ''
   const previewSrc = pendingPreview || existingImage
 
-  const pickFile = (file: File | undefined) => {
+  const pickFile = async (file: File | undefined) => {
     if (!file) return
-    setPendingFile(file)
-    setPendingPreview(URL.createObjectURL(file))
+    const prepared = await compressImage(file)
+    setPendingFile(prepared)
+    setPendingPreview(URL.createObjectURL(prepared))
     setRemoveImage(false)
   }
 

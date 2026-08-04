@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Disc, Plus, Camera, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { compressImage } from '@/utils/compressImage'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -342,7 +343,10 @@ function WheelServiceDialog({ unit, tireOptions, onClose, onCreate, loading }: {
           <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50">
             <Camera className="h-3.5 w-3.5" />
             {file ? file.name : 'Attach alignment printout (optional)'}
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+              const f = e.target.files?.[0] || null
+              setFile(f ? await compressImage(f) : null)
+            }} />
           </label>
           {file && (
             <button onClick={() => setFile(null)} className="ml-2 text-xs text-muted-foreground hover:text-destructive">

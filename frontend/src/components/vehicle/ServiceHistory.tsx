@@ -3,6 +3,7 @@ import { Camera, Receipt, FileText, Eye, EyeOff } from 'lucide-react'
 import { formatDate } from '@/utils/date'
 import { formatUSD } from '@/utils/currency'
 import { imageSrc } from '@/utils/imageUrl'
+import { compressImage } from '@/utils/compressImage'
 import { useNavigate } from 'react-router-dom'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { VisitLines } from './VisitLines'
@@ -128,11 +129,11 @@ function VisitCard({ visit: v, vehicleId, bodyType, unit, onPhoto, onRemoveEvent
           <input
             ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
-            onChange={(e) => {
+            onChange={async (e) => {
               const file = e.target.files?.[0]
-              if (file) addPhoto.mutate({ file, takenAt: visitDate })
+              if (file) addPhoto.mutate({ file: await compressImage(file), takenAt: visitDate })
               if (fileRef.current) fileRef.current.value = ''
             }}
           />

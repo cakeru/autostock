@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { StockBadge } from '@/components/inventory/StockBadge'
 import { formatUSD } from '@/utils/currency'
 import { distanceUnit, unitLabel } from '@/utils/units'
+import { compressImage } from '@/utils/compressImage'
 import { cn } from '@/lib/utils'
 import { PACKAGES, LABOR_PRESETS, FEE_PRESETS, DEFAULT_PAYMENT_METHODS, nextKey, parseDiscount, parseArraySetting } from '@/lib/packages'
 import type { CartLine, SalePackage, Preset } from '@/lib/packages'
@@ -827,7 +828,10 @@ function PaymentOverlay({ totalUSD, rate, methods, pending, onCancel, onComplete
                 </button>
                 {proof && <button type="button" onClick={() => { setProof(null); if (proofRef.current) proofRef.current.value = '' }} className="text-xs text-muted-foreground hover:text-destructive">Remove</button>}
               </div>
-              <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={(e) => setProof(e.target.files?.[0] || null)} />
+              <input ref={proofRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                const f = e.target.files?.[0] || null
+                setProof(f ? await compressImage(f) : null)
+              }} />
             </div>
           </div>
         )}
