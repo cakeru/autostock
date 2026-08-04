@@ -682,10 +682,12 @@ function VehiclePicker({ value, onChange, customerId, vehicles }: {
   customerId: number
   vehicles: Vehicle[]
 }) {
+  const { data: settings } = useSettings()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [plate, setPlate] = useState('')
   const [makeModel, setMakeModel] = useState('')
+  const [unit, setUnit] = useState<'km' | 'mi'>(distanceUnit(settings))
   const [justCreated, setJustCreated] = useState<Vehicle | null>(null)
   const create = useCreateVehicle()
 
@@ -697,7 +699,7 @@ function VehiclePicker({ value, onChange, customerId, vehicles }: {
     if (!plate.trim()) return
     const [make, ...rest] = makeModel.trim().split(' ')
     create.mutate(
-      { customerId, data: { plate_number: plate.trim(), make: make || undefined, model: rest.join(' ') || undefined } },
+      { customerId, data: { plate_number: plate.trim(), make: make || undefined, model: rest.join(' ') || undefined, distance_unit: unit } },
       { onSuccess: (v) => { setJustCreated(v); pick(String(v.id)); setPlate(''); setMakeModel('') } }
     )
   }
@@ -737,6 +739,21 @@ function VehiclePicker({ value, onChange, customerId, vehicles }: {
               <p className="text-xs font-semibold">New vehicle</p>
               <input autoFocus value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="Plate number *" className={inputCls} />
               <input value={makeModel} onChange={(e) => setMakeModel(e.target.value)} placeholder="Make & model (e.g. Toyota Camry)" className={inputCls} />
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-muted-foreground">Odometer unit</p>
+                <div className="flex gap-1 rounded-md border p-0.5">
+                  {(['km', 'mi'] as const).map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => setUnit(u)}
+                      className={`flex-1 rounded px-2 py-1 text-xs font-medium transition-colors ${unit === u ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                    >
+                      {u === 'km' ? 'Kilometers (km)' : 'Miles (mi)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Back</Button>
                 <Button size="sm" className="flex-1" disabled={!plate.trim() || create.isPending} onClick={submit}>{create.isPending ? 'Saving…' : 'Add & select'}</Button>
