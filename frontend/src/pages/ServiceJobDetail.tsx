@@ -29,7 +29,7 @@ export function ServiceJobDetail() {
   const { data: productsData } = useProducts({ per_page: 100 })
   const { data: employees } = useEmployees()
   const { data: settingsData } = useSettings()
-  const unit = job ? (job.mileage_unit === 'mi' ? 'mi' : 'km') : 'km'
+  const unit = job ? (job.mileage_unit === 'mi' ? 'mi' : 'km') : (settingsData?.distance_unit === 'mi' ? 'mi' : 'km')
   const updateMutation = useUpdateServiceJob()
   const completeMutation = useCompleteServiceJob()
   const approveQuoteMutation = useApproveQuote()

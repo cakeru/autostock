@@ -153,11 +153,11 @@ export function DueForService() {
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {i.last_service_at ? formatDate(i.last_service_at) : '—'}
-                          {i.last_mileage != null ? ` · ${i.last_mileage.toLocaleString()} {unit}` : ''}
+                          {i.last_mileage != null ? ` · ${i.last_mileage.toLocaleString()} ${i.distance_unit === 'mi' ? 'mi' : 'km'}` : ''}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {i.due_date ? formatDate(i.due_date) : '—'}
-                          {i.due_mileage != null ? ` · ${i.due_mileage.toLocaleString()} {unit}` : ''}
+                          {i.due_mileage != null ? ` · ${i.due_mileage.toLocaleString()} ${i.distance_unit === 'mi' ? 'mi' : 'km'}` : ''}
                         </td>
                       </tr>
                     ))
@@ -202,7 +202,7 @@ export function DueForService() {
                   <p className="text-sm mt-1">{i.customer_name}{i.customer_phone ? ` · ${i.customer_phone}` : ''}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Due {i.due_date ? formatDate(i.due_date) : '—'}
-                    {i.due_mileage != null ? ` · ${i.due_mileage.toLocaleString()} {unit}` : ''}
+                    {i.due_mileage != null ? ` · ${i.due_mileage.toLocaleString()} ${i.distance_unit === 'mi' ? 'mi' : 'km'}` : ''}
                   </p>
                 </div>
               ))

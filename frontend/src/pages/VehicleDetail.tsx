@@ -86,7 +86,7 @@ export function VehicleDetail() {
         <div className="bg-card rounded-lg p-5 shadow-sm space-y-1.5">
           <p className="text-sm font-semibold flex items-center gap-1.5"><Gauge className="h-4 w-4" /> Last known</p>
           <p className="text-sm text-muted-foreground">
-            {vehicle.last_mileage != null ? `${vehicle.last_mileage.toLocaleString()} {unit}` : 'No mileage recorded'}
+            {vehicle.last_mileage != null ? `${vehicle.last_mileage.toLocaleString()} ${unit}` : 'No mileage recorded'}
           </p>
           <p className="text-sm text-muted-foreground">
             {vehicle.last_service_at ? formatDate(vehicle.last_service_at) : 'No service history'}
@@ -103,7 +103,7 @@ export function VehicleDetail() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {vehicle.due.filter((d) => d.event_type === 'oil' || d.event_type === 'tire').map((d) => (
-            <DueCard key={d.key} due={d} onLog={() => setLogType(d.event_type as ServiceEventType)} />
+            <DueCard key={d.key} due={d} unit={unit} onLog={() => setLogType(d.event_type as ServiceEventType)} />
           ))}
         </div>
       </div>
@@ -221,7 +221,7 @@ const STATUS_LABEL: Record<string, string> = {
   overdue: 'Overdue', due_soon: 'Due soon', ok: 'On track', unknown: 'No history',
 }
 
-function DueCard({ due, onLog }: { due: DueStatus; onLog: () => void }) {
+function DueCard({ due, unit, onLog }: { due: DueStatus; unit: string; onLog: () => void }) {
   const Icon = due.event_type === 'oil' ? Droplet : Disc
   const label = due.event_type === 'oil' ? 'Oil Change' : 'Tires'
 
@@ -237,10 +237,10 @@ function DueCard({ due, onLog }: { due: DueStatus; onLog: () => void }) {
         <p className="mt-1.5 text-xs text-muted-foreground">No {due.event_type} sale or record logged yet for this car.</p>
       ) : (
         <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
-          <p>Last: {due.last_service_at ? formatDate(due.last_service_at) : '—'}{due.last_mileage != null ? ` · ${due.last_mileage.toLocaleString()} {unit}` : ''}</p>
+          <p>Last: {due.last_service_at ? formatDate(due.last_service_at) : '—'}{due.last_mileage != null ? ` · ${due.last_mileage.toLocaleString()} ${unit}` : ''}</p>
           <p>
             Next due: {due.due_date ? formatDate(due.due_date) : '—'}
-            {due.due_mileage != null ? ` · by ${due.due_mileage.toLocaleString()} {unit}` : ''}
+            {due.due_mileage != null ? ` · by ${due.due_mileage.toLocaleString()} ${unit}` : ''}
           </p>
         </div>
       )}
