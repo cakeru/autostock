@@ -27,7 +27,7 @@ func NewHandler(pool *pgxpool.Pool, store storage.Storage) *Handler {
 	return &Handler{service: service.NewService(pool), store: store}
 }
 
-const maxImageBytes = 8 << 20 // 8 MB upload cap
+const maxImageBytes = 20 << 20 // 20 MB upload cap (phone camera photos are large)
 const maxImportBytes = 5 << 20 // 5 MB CSV upload cap
 
 func (h *Handler) List(c *gin.Context) {

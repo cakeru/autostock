@@ -82,3 +82,34 @@ func TestAdjustStock(t *testing.T) {
 		assert.Contains(t, err.Error(), "Cannot adjust stock below 0")
 	})
 }
+
+// Regression: product edits used to 500 whenever the payload included `type`
+// or service-life fields — the UPDATE's $22-$25 placeholders were shifted, so
+// COALESCE compared a text column against an integer parameter.
+func TestUpdateProductWithFullFields(t *testing.T) {
+	s, branchID := setupService(t)
+	prodID := testutil.SeedProduct(t, s.pool, branchID, "Update Full", "UPD-FULL", 3, 50)
+
+	tire := "tire"
+	lifeKm := 40000
+	lifeDays := 1460
+	isOil := true
+	isBulk := false
+	sell := 60.0
+	p, err := s.Update(context.Background(), branchID, prodID, &dto.UpdateProductRequest{
+		Type:         &tire,
+		SellPrice:    &sell,
+		IsOilProduct: &isOil,
+		IsBulk:       &isBulk,
+		LifeKm:       &lifeKm,
+		LifeDays:     &lifeDays,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "tire", p.Type)
+	assert.Equal(t, 60.0, p.SellPrice)
+	assert.True(t, p.IsOilProduct)
+	require.NotNil(t, p.LifeKm)
+	assert.Equal(t, 40000, *p.LifeKm)
+	require.NotNil(t, p.LifeDays)
+	assert.Equal(t, 1460, *p.LifeDays)
+}

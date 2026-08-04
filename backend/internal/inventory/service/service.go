@@ -241,10 +241,10 @@ func (s *Service) Update(ctx context.Context, branchID int64, id int64, req *dto
 		    barcode      = COALESCE($19, barcode),
 		    is_oil_product = COALESCE($20, is_oil_product),
 		    life_km = COALESCE($21, life_km),
-		    life_days = COALESCE($24, life_days),
-		    life_months = COALESCE($25, life_months),
-		    is_bulk      = COALESCE($22, is_bulk),
-		    type         = COALESCE($23, type),
+		    life_days = COALESCE($22, life_days),
+		    life_months = COALESCE($23, life_months),
+		    is_bulk      = COALESCE($24, is_bulk),
+		    type         = COALESCE($25, type),
 		    updated_at   = NOW()
 		WHERE id = $17 AND branch_id = $18 AND is_active = true
 		RETURNING id, branch_id, type, sku, COALESCE(barcode,''), name, COALESCE(description,''), COALESCE(category,''),
