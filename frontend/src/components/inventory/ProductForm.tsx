@@ -139,12 +139,12 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
             <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
               {previewSrc ? 'Change photo' : 'Upload photo'}
             </Button>
-            <p className="mt-1 text-xs text-muted-foreground">JPG, PNG or WebP · up to 8 MB</p>
+            <p className="mt-1 text-xs text-muted-foreground">Photo from camera or gallery · up to 20 MB</p>
           </div>
           <input
             ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
             onChange={(e) => pickFile(e.target.files?.[0])}
           />
