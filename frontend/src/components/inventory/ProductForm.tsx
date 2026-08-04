@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { imageSrc } from '@/utils/imageUrl'
+import { kmToMi, miToKm } from '@/utils/units'
 import type { CreateProductRequest } from '@/types/product'
 
 export interface ProductImageIntent {
@@ -38,7 +39,9 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
   const [isBulk, setIsBulk] = useState(initial?.is_bulk || false)
 
   const [tireSize, setTireSize] = useState(initial?.tire_size || '')
-  const [lifeKm, setLifeKm] = useState(initial?.life_km?.toString() || '')
+  const [lifeKm, setLifeKm] = useState(
+    initial?.life_km != null ? (distanceUnitLabel === 'mi' ? kmToMi(initial.life_km).toString() : initial.life_km.toString()) : ''
+  )
   const [lifeDays, setLifeDays] = useState(initial?.life_days?.toString() || '')
   const [lifeMonths, setLifeMonths] = useState(initial?.life_months?.toString() || '')
   const [tireBrand, setTireBrand] = useState(initial?.tire_brand || '')
@@ -96,7 +99,7 @@ export function ProductForm({ initial, onSubmit, onCancel, loading, distanceUnit
     // Service-life rating (km / days / months) — drives the vehicle's
     // due-for-service reminder when this product is sold on an invoice.
     if (type === 'tire' || isOilProduct) {
-      data.life_km = lifeKm ? parseInt(lifeKm) : null
+      data.life_km = lifeKm ? (distanceUnitLabel === 'mi' ? miToKm(parseInt(lifeKm)) : parseInt(lifeKm)) : null
       data.life_days = lifeDays ? parseInt(lifeDays) : null
       data.life_months = lifeMonths ? parseInt(lifeMonths) : null
     }

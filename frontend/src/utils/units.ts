@@ -13,3 +13,15 @@ export function unitLabel(unit: DistanceUnit): string {
 export function unitWord(unit: DistanceUnit): string {
   return unit === 'mi' ? 'Miles' : 'Kilometers'
 }
+
+// Storage is always km (backend convention); these convert to/from the shop's
+// display unit so a miles-based shop enters and reads values in miles.
+const KM_PER_MI = 1.609344
+
+export function kmToMi(km: number): number {
+  return Math.round(km / KM_PER_MI)
+}
+
+export function miToKm(mi: number): number {
+  return Math.round(mi * KM_PER_MI)
+}

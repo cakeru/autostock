@@ -4,7 +4,7 @@ import { useSettings, useUpdateSetting, useBatchUpdateSettings, useUpdateExchang
 import { toast } from 'sonner'
 import { useIntervalSettings, useUpdateIntervalSettings } from '@/hooks/useVehicleProfile'
 import type { PartRule } from '@/types/vehicleProfile'
-import { distanceUnit, unitLabel } from '@/utils/units'
+import { distanceUnit, unitLabel, kmToMi, miToKm } from '@/utils/units'
 import { Trash2, Plus, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -459,15 +459,17 @@ function ServiceIntervalsEditor() {
 
   useEffect(() => {
     if (intervals) {
-      setOilKm(intervals.oil_interval_km.toString())
+      const toDisplay = (km: number) => (unit === 'mi' ? kmToMi(km) : km)
+      setOilKm(toDisplay(intervals.oil_interval_km).toString())
       setOilDays(intervals.oil_interval_days.toString())
-      setTireLifeKm(intervals.tire_life_km.toString())
+      setTireLifeKm(toDisplay(intervals.tire_life_km).toString())
       setTireDays(intervals.tire_interval_days ? intervals.tire_interval_days.toString() : '')
       setDueSoonDays(intervals.due_soon_days.toString())
-      setFallbackKmPerDay(intervals.fallback_km_per_day.toString())
-      setPartRules(intervals.part_rules || [])
+      setFallbackKmPerDay(toDisplay(intervals.fallback_km_per_day).toString())
+      setPartRules((intervals.part_rules || []).map((r) =>
+        unit === 'mi' && r.km != null ? { ...r, km: kmToMi(r.km) } : r))
     }
-  }, [intervals])
+  }, [intervals, unit])
 
   if (isLoading) return null
 
@@ -538,14 +540,17 @@ function ServiceIntervalsEditor() {
 
         <SaveButton
           onClick={() => {
+            const toStorage = (v: number) => (unit === 'mi' ? miToKm(v) : v)
             save.mutate({
-              oil_interval_km: parseInt(oilKm) || 0,
+              oil_interval_km: toStorage(parseInt(oilKm) || 0),
               oil_interval_days: parseInt(oilDays) || 0,
-              tire_life_km: parseInt(tireLifeKm) || 0,
+              tire_life_km: toStorage(parseInt(tireLifeKm) || 0),
               tire_interval_days: parseInt(tireDays) || 0,
-              fallback_km_per_day: parseFloat(fallbackKmPerDay) || 0,
+              fallback_km_per_day: toStorage(parseFloat(fallbackKmPerDay) || 0),
               due_soon_days: parseInt(dueSoonDays) || 0,
-              part_rules: partRules.filter((r) => r.part_key.trim()),
+              part_rules: partRules
+                .filter((r) => r.part_key.trim())
+                .map((r) => unit === 'mi' && r.km != null ? { ...r, km: miToKm(r.km) } : r),
             }, { onSuccess: saved.trigger })
           }}
           loading={save.isPending}
