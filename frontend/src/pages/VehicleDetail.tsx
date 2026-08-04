@@ -321,9 +321,9 @@ function IntervalsDialog({ vehicle, unit, onClose, onSave, loading }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-sm rounded-lg bg-card p-5 shadow-lg">
-        <p className="mb-1 text-sm font-semibold">Reminder Overrides for This Vehicle</p>
+        <p className="mb-1 text-sm font-semibold">Next service — this vehicle</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Leave blank to use the shop defaults. Set a <span className="font-medium text-foreground">days</span> interval for a firm calendar due date; a <span className="font-medium text-foreground">{unit}</span> interval is projected from how far the car is driven.
+          Sets when this car's next oil change / tire service is due. Leave blank to use the shop defaults. If this car has no service history yet, the due is calculated from its current odometer and today.
         </p>
         <div className="space-y-4">
           <div>
