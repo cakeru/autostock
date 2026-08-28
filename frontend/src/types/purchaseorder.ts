@@ -17,6 +17,8 @@ export interface ReceiveLine {
 export interface ReceiveRequest {
   items?: ReceiveLine[]
   paid?: boolean
+  invoice_number?: string
+  invoice_image?: string
 }
 
 export interface ReceiveResult {

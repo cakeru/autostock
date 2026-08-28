@@ -31,18 +31,21 @@ type SupplierResponse struct {
 }
 
 type PurchaseItem struct {
-	BatchID     int64   `json:"batch_id"`
-	ProductID   *int64  `json:"product_id,omitempty"`
-	ProductName string  `json:"product_name"`
-	Quantity    int     `json:"quantity"`
-	UnitCost    float64 `json:"unit_cost"`
-	TotalCost   float64 `json:"total_cost"`
-	AmountPaid  float64 `json:"amount_paid"`
-	Owed        float64 `json:"owed"`
-	DOTCode     string  `json:"dot_code,omitempty"`
-	ReceivedAt  string  `json:"received_at"`
+	BatchID       int64   `json:"batch_id"`
+	ProductID     *int64  `json:"product_id,omitempty"`
+	ProductName   string  `json:"product_name"`
+	Quantity      int     `json:"quantity"`
+	UnitCost      float64 `json:"unit_cost"`
+	TotalCost     float64 `json:"total_cost"`
+	AmountPaid    float64 `json:"amount_paid"`
+	Owed          float64 `json:"owed"`
+	DOTCode       string  `json:"dot_code,omitempty"`
+	InvoiceNumber string  `json:"invoice_number,omitempty"`
+	InvoiceImage  string  `json:"invoice_image,omitempty"`
+	ReceivedAt    string  `json:"received_at"`
 }
 
+// PayRequest selects the exact batches (receives) to pay off in full.
 type PayRequest struct {
-	Amount float64 `json:"amount" binding:"required,gt=0"`
+	BatchIDs []int64 `json:"batch_ids" binding:"required,min=1"`
 }

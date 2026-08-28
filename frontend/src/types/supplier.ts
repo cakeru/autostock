@@ -22,6 +22,8 @@ export interface Purchase {
   amount_paid: number
   owed: number
   dot_code?: string
+  invoice_number?: string
+  invoice_image?: string
   received_at: string
 }
 

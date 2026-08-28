@@ -8,5 +8,5 @@ export const suppliersApi = {
   create: (data: CreateSupplierRequest): Promise<Supplier> => api.post('/suppliers', data).then(r => r.data.data),
   update: (id: number, data: UpdateSupplierRequest): Promise<Supplier> => api.put(`/suppliers/${id}`, data).then(r => r.data.data),
   remove: (id: number) => api.delete(`/suppliers/${id}`),
-  pay: (id: number, amount: number): Promise<Supplier> => api.post(`/suppliers/${id}/pay`, { amount }).then(r => r.data.data),
+  pay: (id: number, batchIds: number[]): Promise<Supplier> => api.post(`/suppliers/${id}/pay`, { batch_ids: batchIds }).then(r => r.data.data),
 }

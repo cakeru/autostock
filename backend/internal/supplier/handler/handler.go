@@ -129,7 +129,7 @@ func (h *Handler) Pay(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_REQUEST", "message": err.Error()}})
 		return
 	}
-	s, err := h.service.Pay(c.Request.Context(), branch(c), id, req.Amount)
+	s, err := h.service.Pay(c.Request.Context(), branch(c), id, req.BatchIDs)
 	if err != nil {
 		fail(c, err, "Failed to record payment")
 		return

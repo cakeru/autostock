@@ -42,10 +42,11 @@ export function useDeleteSupplier() {
 export function usePaySupplier() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, amount }: { id: number; amount: number }) => suppliersApi.pay(id, amount),
-    onSuccess: () => {
+    mutationFn: ({ id, batchIds }: { id: number; batchIds: number[] }) => suppliersApi.pay(id, batchIds),
+    onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['suppliers'] })
-      qc.invalidateQueries({ queryKey: ['supplier'] })
+      qc.invalidateQueries({ queryKey: ['supplier', id] })
+      qc.invalidateQueries({ queryKey: ['supplier', id, 'purchases'] })
       toast.success('Payment recorded')
     },
   })

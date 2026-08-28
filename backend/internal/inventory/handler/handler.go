@@ -245,6 +245,49 @@ func (h *Handler) UploadImage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": product})
 }
 
+// UploadInvoice stores a supplier invoice photo before the receive that
+// references it exists. Keeps more detail than product photos (1600px) so
+// invoice text stays legible. Returns the URL to persist on the batch.
+func (h *Handler) UploadInvoice(c *gin.Context) {
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "VALIDATION_ERROR", "message": "Expected an 'image' file field"}})
+		return
+	}
+	if fileHeader.Size > maxImageBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": gin.H{"code": "FILE_TOO_LARGE", "message": "Image must be 20 MB or smaller"}})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "VALIDATION_ERROR", "message": "Could not read upload"}})
+		return
+	}
+	defer file.Close()
+
+	img, err := imaging.Decode(file, imaging.AutoOrientation(true))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_IMAGE", "message": "Unsupported or corrupt image file"}})
+		return
+	}
+	img = imaging.Fit(img, 1600, 1600, imaging.Lanczos)
+	var buf bytes.Buffer
+	if err := imaging.Encode(&buf, img, imaging.JPEG, imaging.JPEGQuality(82)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to process image"}})
+		return
+	}
+
+	key := fmt.Sprintf("uploads/%d.jpg", time.Now().UnixNano())
+	url, err := h.store.Save(c.Request.Context(), key, &buf, "image/jpeg")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "STORAGE_ERROR", "message": "Failed to store image"}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"url": url}})
+}
+
 func (h *Handler) DeleteImage(c *gin.Context) {
 	branchID, _ := c.Get("branch_id")
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

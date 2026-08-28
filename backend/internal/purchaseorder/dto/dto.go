@@ -15,10 +15,13 @@ type AddPOItemRequest struct {
 
 // ReceiveRequest lists what actually showed up. Any line omitted receives its
 // full remaining quantity_ordered - quantity_received; a line can be included
-// with quantity=0 to explicitly receive nothing for it this trip.
+// with quantity=0 to explicitly receive nothing for it this trip. The invoice
+// number/image (optional) apply to every batch created by this receive.
 type ReceiveRequest struct {
-	Items []ReceiveLine `json:"items,omitempty"`
-	Paid  bool          `json:"paid,omitempty"`
+	Items         []ReceiveLine `json:"items,omitempty"`
+	Paid          bool          `json:"paid,omitempty"`
+	InvoiceNumber string        `json:"invoice_number,omitempty"`
+	InvoiceImage  string        `json:"invoice_image,omitempty"`
 }
 
 type ReceiveLine struct {

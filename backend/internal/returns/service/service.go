@@ -155,7 +155,7 @@ func (s *Service) Create(ctx context.Context, branchID, userID int64, req *dto.C
 				if _, err := tx.Exec(ctx, `UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2`, qty, *l.productID); err != nil {
 					return nil, fmt.Errorf("restock: %w", err)
 				}
-				batchID, err := batch.Create(ctx, tx, branchID, *l.productID, qty, buyPrice, nil, 0, "Customer return", "", "", &userID)
+				batchID, err := batch.Create(ctx, tx, branchID, *l.productID, qty, buyPrice, nil, 0, "Customer return", "", "", &userID, "", "")
 				if err != nil {
 					return nil, err
 				}

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Trash2, Pencil, X } from 'lucide-react'
+import { Trash2, Pencil, X, ImagePlus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,8 @@ import { Select } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { TableCard, Th } from '@/components/ui/table'
 import { formatUSD } from '@/utils/currency'
+import { compressImage } from '@/utils/compressImage'
+import { uploadsApi } from '@/services/uploads'
 import {
   usePurchaseOrder, useAddPOItem, useRemovePOItem,
   usePlacePO, useCancelPO, useReceivePO, useUpdatePurchaseOrder,
@@ -48,6 +50,11 @@ export function PurchaseOrderDetail() {
   const [unitCost, setUnitCost] = useState('')
   const [receiveDrafts, setReceiveDrafts] = useState<Record<number, string>>({})
   const [markPaid, setMarkPaid] = useState(false)
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [invoicePreview, setInvoicePreview] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const invoiceRef = useRef<HTMLInputElement>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>
@@ -83,7 +90,20 @@ export function PurchaseOrderDetail() {
     updateMutation.mutate({ supplier_id: sid, notes: notes.trim() || undefined }, { onSuccess: () => setEditingHeader(false) })
   }
 
-  const handleReceive = () => {
+  const pickInvoice = async (file: File | undefined) => {
+    if (!file) return
+    const prepared = await compressImage(file)
+    setInvoiceFile(prepared)
+    setInvoicePreview(URL.createObjectURL(prepared))
+  }
+
+  const clearInvoice = () => {
+    setInvoiceFile(null)
+    setInvoicePreview('')
+    if (invoiceRef.current) invoiceRef.current.value = ''
+  }
+
+  const handleReceive = async () => {
     const items = po.items
       .map((it) => {
         const remaining = it.quantity_ordered - it.quantity_received
@@ -93,8 +113,17 @@ export function PurchaseOrderDetail() {
       })
       .filter((l) => l.quantity > 0)
     if (items.length === 0) return
-    receiveMutation.mutate({ id: poId, data: { items, paid: markPaid } }, {
-      onSuccess: () => setReceiveDrafts({}),
+    let imageUrl = ''
+    if (invoiceFile) {
+      setUploading(true)
+      try {
+        imageUrl = await uploadsApi.uploadImage(invoiceFile)
+      } finally {
+        setUploading(false)
+      }
+    }
+    receiveMutation.mutate({ id: poId, data: { items, paid: markPaid, invoice_number: invoiceNumber || undefined, invoice_image: imageUrl || undefined } }, {
+      onSuccess: () => { setReceiveDrafts({}); setInvoiceNumber(''); clearInvoice() },
     })
   }
 
@@ -231,12 +260,38 @@ export function PurchaseOrderDetail() {
 
       {canReceive && po.items.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card p-4 shadow-sm">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={markPaid} onChange={(e) => setMarkPaid(e.target.checked)} className="accent-primary" />
-            Paid on delivery <span className="text-xs text-muted-foreground">(uncheck to record as owed to the supplier)</span>
-          </label>
-          <Button onClick={handleReceive} disabled={receiveMutation.isPending}>
-            {receiveMutation.isPending ? 'Receiving...' : 'Receive'}
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={markPaid} onChange={(e) => setMarkPaid(e.target.checked)} className="accent-primary" />
+              Paid on delivery <span className="text-xs text-muted-foreground">(uncheck to record as owed to the supplier)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Invoice # (optional)" className="w-40" />
+              <div className="flex items-center gap-2">
+                {invoicePreview ? (
+                  <>
+                    <img src={invoicePreview} alt="Invoice preview" className="h-8 w-8 rounded object-cover bg-muted" />
+                    <button type="button" onClick={clearInvoice} aria-label="Remove invoice photo" className="grid h-5 w-5 place-items-center rounded-full bg-destructive text-destructive-foreground shadow">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => invoiceRef.current?.click()}>
+                    <ImagePlus className="h-3.5 w-3.5" /> Invoice photo
+                  </Button>
+                )}
+                <input
+                  ref={invoiceRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => pickInvoice(e.target.files?.[0])}
+                />
+              </div>
+            </div>
+          </div>
+          <Button onClick={handleReceive} disabled={receiveMutation.isPending || uploading}>
+            {uploading ? 'Uploading…' : receiveMutation.isPending ? 'Receiving...' : 'Receive'}
           </Button>
         </div>
       )}

@@ -67,13 +67,15 @@ type UpdateProductRequest struct {
 }
 
 type ReceiveStockRequest struct {
-	Quantity   float64 `json:"quantity" binding:"required,gt=0"`
-	UnitCost   float64 `json:"unit_cost,omitempty"`
-	SupplierID *int64  `json:"supplier_id,omitempty"`
-	Paid       bool    `json:"paid,omitempty"` // paid to supplier on delivery
-	Supplier   string  `json:"supplier,omitempty"`
-	DOTCode    string  `json:"dot_code,omitempty"`
-	Notes      string  `json:"notes,omitempty"`
+	Quantity      float64 `json:"quantity" binding:"required,gt=0"`
+	UnitCost      float64 `json:"unit_cost,omitempty"`
+	SupplierID    *int64  `json:"supplier_id,omitempty"`
+	Paid          bool    `json:"paid,omitempty"` // paid to supplier on delivery
+	Supplier      string  `json:"supplier,omitempty"`
+	DOTCode       string  `json:"dot_code,omitempty"`
+	Notes         string  `json:"notes,omitempty"`
+	InvoiceNumber string  `json:"invoice_number,omitempty"`
+	InvoiceImage  string  `json:"invoice_image,omitempty"` // uploaded URL, optional
 }
 
 type AdjustStockRequest struct {

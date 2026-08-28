@@ -2,7 +2,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SlideOver } from '@/components/ui/SlideOver'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Pencil, Trash2, PackagePlus, Scale, LayoutGrid, List, History, Upload, Download, CheckCircle2, XCircle } from 'lucide-react'
+import { Pencil, Trash2, PackagePlus, Scale, LayoutGrid, List, History, Upload, Download, CheckCircle2, XCircle, ImagePlus, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useReceiveStock, useAdjustStock, useUploadProductImage, useDeleteProductImage, useImportProducts } from '@/hooks/useProducts'
@@ -11,6 +11,8 @@ import { useSuppliers } from '@/hooks/useSuppliers'
 import { useSettings } from '@/hooks/useSettings'
 import { downloadFile } from '@/utils/download'
 import { distanceUnit, unitLabel } from '@/utils/units'
+import { compressImage } from '@/utils/compressImage'
+import { uploadsApi } from '@/services/uploads'
 import { StockBadge } from '@/components/inventory/StockBadge'
 import { ProductForm, type ProductFormProps } from '@/components/inventory/ProductForm'
 import { Button } from '@/components/ui/button'
@@ -389,7 +391,7 @@ export function Inventory() {
 function ReceiveDialog({ product, onClose, onConfirm, loading }: {
   product: Product
   onClose: () => void
-  onConfirm: (data: { quantity: number; unit_cost?: number; supplier_id?: number; paid?: boolean; dot_code?: string; notes?: string }) => void
+  onConfirm: (data: { quantity: number; unit_cost?: number; supplier_id?: number; paid?: boolean; dot_code?: string; notes?: string; invoice_number?: string; invoice_image?: string }) => void
   loading: boolean
 }) {
   const [qty, setQty] = useState('1')
@@ -398,7 +400,48 @@ function ReceiveDialog({ product, onClose, onConfirm, loading }: {
   const [paid, setPaid] = useState(true)
   const [dot, setDot] = useState('')
   const [notes, setNotes] = useState('')
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [invoicePreview, setInvoicePreview] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const invoiceRef = useRef<HTMLInputElement>(null)
   const { data: suppliers } = useSuppliers()
+
+  const pickInvoice = async (file: File | undefined) => {
+    if (!file) return
+    const prepared = await compressImage(file)
+    setInvoiceFile(prepared)
+    setInvoicePreview(URL.createObjectURL(prepared))
+  }
+
+  const clearInvoice = () => {
+    setInvoiceFile(null)
+    setInvoicePreview('')
+    if (invoiceRef.current) invoiceRef.current.value = ''
+  }
+
+  const handleConfirm = async () => {
+    let imageUrl = ''
+    if (invoiceFile) {
+      setUploading(true)
+      try {
+        imageUrl = await uploadsApi.uploadImage(invoiceFile)
+      } finally {
+        setUploading(false)
+      }
+    }
+    onConfirm({
+      quantity: parseFloat(qty) || 1,
+      unit_cost: parseFloat(cost) || undefined,
+      supplier_id: supplierId ? parseInt(supplierId) : undefined,
+      paid: supplierId ? paid : undefined,
+      dot_code: dot || undefined,
+      notes: notes || undefined,
+      invoice_number: invoiceNumber || undefined,
+      invoice_image: imageUrl || undefined,
+    })
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-card rounded-lg p-5 shadow-lg w-full max-w-sm mx-4">
@@ -435,6 +478,47 @@ function ReceiveDialog({ product, onClose, onConfirm, loading }: {
             </label>
           )}
           <div className="space-y-1">
+            <label className="text-xs font-medium">Invoice #</label>
+            <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="e.g. INV-8821" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Invoice photo</label>
+            <div className="flex items-center gap-3">
+              <div className="relative h-12 w-12 flex-shrink-0">
+                {invoicePreview ? (
+                  <>
+                    <img src={invoicePreview} alt="Invoice preview" className="h-12 w-12 rounded-md object-cover bg-muted" />
+                    <button
+                      type="button"
+                      onClick={clearInvoice}
+                      aria-label="Remove invoice photo"
+                      className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-destructive text-destructive-foreground shadow"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="grid h-12 w-12 place-items-center rounded-md border border-dashed text-muted-foreground">
+                    <ImagePlus className="h-5 w-5" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <Button type="button" variant="outline" size="sm" onClick={() => invoiceRef.current?.click()}>
+                  {invoicePreview ? 'Change photo' : 'Upload photo'}
+                </Button>
+                <p className="mt-1 text-xs text-muted-foreground">Photo of the supplier invoice</p>
+              </div>
+              <input
+                ref={invoiceRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickInvoice(e.target.files?.[0])}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
             <label className="text-xs font-medium">Notes</label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" />
           </div>
@@ -442,17 +526,10 @@ function ReceiveDialog({ product, onClose, onConfirm, loading }: {
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button
-            onClick={() => onConfirm({
-              quantity: parseFloat(qty) || 1,
-              unit_cost: parseFloat(cost) || undefined,
-              supplier_id: supplierId ? parseInt(supplierId) : undefined,
-              paid: supplierId ? paid : undefined,
-              dot_code: dot || undefined,
-              notes: notes || undefined,
-            })}
-            disabled={loading || !qty || parseFloat(qty) <= 0}
+            onClick={handleConfirm}
+            disabled={loading || uploading || !qty || parseFloat(qty) <= 0}
           >
-            {loading ? 'Receiving...' : 'Receive'}
+            {uploading ? 'Uploading…' : loading ? 'Receiving...' : 'Receive'}
           </Button>
         </div>
       </div>

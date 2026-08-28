@@ -172,6 +172,10 @@ func main() {
 			inv.DELETE("/:id/image", middleware.PermissionMiddleware("inventory:update"), inventoryH.DeleteImage)
 		}
 
+		// Generic image upload (supplier invoice photos) — returns a URL to
+		// persist on the batch when the receive is recorded.
+		v1.POST("/uploads", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("inventory:update"), inventoryH.UploadInvoice)
+
 		v1.GET("/batches/:batch_id/consumers", middleware.AuthMiddleware(cfg.JWTSecret, pool), middleware.PermissionMiddleware("inventory:view"), inventoryH.BatchConsumers)
 
 		stk := v1.Group("/stocktakes")

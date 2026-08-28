@@ -378,7 +378,7 @@ func (s *Service) Receive(ctx context.Context, branchID, poID, userID int64, req
 		if req.Paid {
 			amountPaid = float64(qty) * l.unitCost
 		}
-		batchID, err := batch.Create(ctx, tx, branchID, l.productID, float64(qty), l.unitCost, &supplierID, amountPaid, supplierName, "", "PO "+poNumber, &userID)
+		batchID, err := batch.Create(ctx, tx, branchID, l.productID, float64(qty), l.unitCost, &supplierID, amountPaid, supplierName, "", "PO "+poNumber, &userID, req.InvoiceNumber, req.InvoiceImage)
 		if err != nil {
 			return nil, err
 		}

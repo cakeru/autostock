@@ -124,7 +124,8 @@ func (s *Service) Purchases(ctx context.Context, branchID, supplierID int64) ([]
 	rows, err := s.pool.Query(ctx, `
 		SELECT b.id, b.product_id, COALESCE(p.name, ''), b.quantity_received, b.unit_cost,
 		       b.quantity_received * b.unit_cost, b.amount_paid,
-		       b.quantity_received * b.unit_cost - b.amount_paid, COALESCE(b.dot_code, ''), b.received_at::text
+		       b.quantity_received * b.unit_cost - b.amount_paid, COALESCE(b.dot_code, ''),
+		       COALESCE(b.invoice_number, ''), COALESCE(b.invoice_image, ''), b.received_at::text
 		FROM batches b LEFT JOIN products p ON p.id = b.product_id
 		WHERE b.supplier_id = $1 AND b.branch_id = $2
 		ORDER BY b.received_at DESC`, supplierID, branchID)
@@ -137,7 +138,7 @@ func (s *Service) Purchases(ctx context.Context, branchID, supplierID int64) ([]
 	for rows.Next() {
 		var it dto.PurchaseItem
 		if err := rows.Scan(&it.BatchID, &it.ProductID, &it.ProductName, &it.Quantity, &it.UnitCost,
-			&it.TotalCost, &it.AmountPaid, &it.Owed, &it.DOTCode, &it.ReceivedAt); err != nil {
+			&it.TotalCost, &it.AmountPaid, &it.Owed, &it.DOTCode, &it.InvoiceNumber, &it.InvoiceImage, &it.ReceivedAt); err != nil {
 			return nil, fmt.Errorf("scan purchase: %w", err)
 		}
 		out = append(out, it)
@@ -145,8 +146,9 @@ func (s *Service) Purchases(ctx context.Context, branchID, supplierID int64) ([]
 	return out, nil
 }
 
-// Pay applies a payment to the supplier's oldest unpaid purchases (FIFO).
-func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, amount float64) (*dto.SupplierResponse, error) {
+// Pay settles the selected batches (receives) in full. Each batch must belong
+// to the supplier and branch; only the outstanding amount is applied.
+func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, batchIDs []int64) (*dto.SupplierResponse, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -161,8 +163,9 @@ func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, amount fl
 	rows, err := tx.Query(ctx, `
 		SELECT id, quantity_received * unit_cost - amount_paid AS owed
 		FROM batches
-		WHERE supplier_id = $1 AND branch_id = $2 AND (quantity_received * unit_cost - amount_paid) > 0
-		ORDER BY received_at ASC`, supplierID, branchID)
+		WHERE id = ANY($1) AND supplier_id = $2 AND branch_id = $3
+		  AND (quantity_received * unit_cost - amount_paid) > 0
+		FOR UPDATE`, batchIDs, supplierID, branchID)
 	if err != nil {
 		return nil, fmt.Errorf("owed batches: %w", err)
 	}
@@ -181,19 +184,14 @@ func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, amount fl
 	}
 	rows.Close()
 
-	remaining := round2(amount)
+	if len(batches) == 0 {
+		return nil, &domain.AppError{Code: "NOTHING_OWED", Message: "None of the selected purchases are unpaid", Status: 400}
+	}
+
 	for _, b := range batches {
-		if remaining <= 0 {
-			break
-		}
-		pay := b.amt
-		if pay > remaining {
-			pay = remaining
-		}
-		if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(pay), b.id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(b.amt), b.id); err != nil {
 			return nil, fmt.Errorf("apply payment: %w", err)
 		}
-		remaining = round2(remaining - pay)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
