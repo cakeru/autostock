@@ -530,7 +530,7 @@ func (s *Service) GetTechnicians(ctx context.Context, branchID int64, from, to s
 			return nil, fmt.Errorf("scan tech: %w", err)
 		}
 		t.Revenue = round2(t.Revenue)
-		t.SalaryCost, t.CommissionCost = computePayCost(payType, baseSalary, hourlyRate, commissionRate, laborRevenue, t.Hours, days)
+		t.SalaryCost, t.CommissionCost = computePayCost(payType, baseSalary, hourlyRate, commissionRate, laborRevenue, t.Hours, days, isFullMonth(from, to))
 		t.PayrollCost = round2(t.SalaryCost + t.CommissionCost)
 		resp.Technicians = append(resp.Technicians, t)
 	}
@@ -538,23 +538,45 @@ func (s *Service) GetTechnicians(ctx context.Context, branchID int64, from, to s
 }
 
 // computePayCost applies one employee's pay formula for the period:
-// salary is the monthly base_salary annualized then prorated by days in
-// range; hourly is hourly_rate times hours actually logged on completed jobs
-// in range; commission is commission_rate% of the labor revenue they billed
-// in range; hybrid combines prorated salary with commission.
-func computePayCost(payType string, baseSalary, hourlyRate, commissionRate, laborRevenue, hours float64, days int) (salaryCost, commissionCost float64) {
+// salary is the monthly base_salary, paid in full when the range covers a
+// whole calendar month, otherwise prorated by 30-day months; hourly is
+// hourly_rate times hours actually logged on completed jobs in range;
+// commission is commission_rate% of the labor revenue they billed in range;
+// hybrid combines salary with commission.
+func computePayCost(payType string, baseSalary, hourlyRate, commissionRate, laborRevenue, hours float64, days int, fullMonth bool) (salaryCost, commissionCost float64) {
 	switch payType {
 	case "salary":
-		salaryCost = baseSalary * 12.0 / 365.0 * float64(days)
+		salaryCost = salaryForRange(baseSalary, days, fullMonth)
 	case "hourly":
 		salaryCost = hourlyRate * hours
 	case "commission":
 		commissionCost = commissionRate / 100 * laborRevenue
 	case "hybrid":
-		salaryCost = baseSalary * 12.0 / 365.0 * float64(days)
+		salaryCost = salaryForRange(baseSalary, days, fullMonth)
 		commissionCost = commissionRate / 100 * laborRevenue
 	}
 	return round2(salaryCost), round2(commissionCost)
+}
+
+// salaryForRange returns the salary owed for a period: the full monthly
+// base_salary when the range is exactly one calendar month, otherwise
+// prorated by days in range on a 30-day month basis.
+func salaryForRange(baseSalary float64, days int, fullMonth bool) float64 {
+	if fullMonth {
+		return baseSalary
+	}
+	return baseSalary * float64(days) / 30.0
+}
+
+// isFullMonth reports whether the range covers exactly one whole calendar
+// month (e.g. 2026-08-01..2026-08-31).
+func isFullMonth(from, to string) bool {
+	f, err1 := time.Parse("2006-01-02", from)
+	t, err2 := time.Parse("2006-01-02", to)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return f.Day() == 1 && t.AddDate(0, 0, 1).Day() == 1 && f.Year() == t.Year() && f.Month() == t.Month()
 }
 
 func daysInRange(from, to string) int {
@@ -685,7 +707,7 @@ func (s *Service) payrollForRange(ctx context.Context, branchID int64, from, to 
 			&hours, &laborRevenue); err != nil {
 			return nil, 0, fmt.Errorf("scan payroll: %w", err)
 		}
-		line.SalaryCost, line.CommissionCost = computePayCost(line.PayType, baseSalary, hourlyRate, commissionRate, laborRevenue, hours, days)
+		line.SalaryCost, line.CommissionCost = computePayCost(line.PayType, baseSalary, hourlyRate, commissionRate, laborRevenue, hours, days, isFullMonth(from, to))
 		line.Total = round2(line.SalaryCost + line.CommissionCost)
 		if line.Total == 0 {
 			continue
