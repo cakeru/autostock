@@ -37,6 +37,11 @@ func fail(c *gin.Context, err error, msg string) {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "Supplier not found"}})
 		return
 	}
+	var appErr *domain.AppError
+	if errors.As(err, &appErr) {
+		c.JSON(appErr.Status, gin.H{"error": gin.H{"code": appErr.Code, "message": appErr.Message}})
+		return
+	}
 	c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": msg}})
 }
 
