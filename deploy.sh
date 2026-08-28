@@ -15,6 +15,12 @@ git fetch "$REPO_URL" main
 git reset --hard FETCH_HEAD
 
 COMPOSE_FILE="${REPO_PATH:-/repo}/docker-compose.yml"
+# The updater runs compose from /repo, which would otherwise create a second
+# project ("repo") and collide with the fixed container_name of the existing
+# stack (created from the host repo dir). Reuse the running stack's project
+# name so updates replace the same containers/volumes; first deploy falls
+# back to "repo".
+PROJECT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' autostock-backend 2>/dev/null || echo repo)"
 LAST_SHA="$(cat "${REPO_PATH:-/repo}/.deploy-sha" 2>/dev/null || true)"
 NEW_SHA="$(git rev-parse FETCH_HEAD)"
 
@@ -35,19 +41,19 @@ if changed frontend docker-compose.yml; then BUILD_FRONTEND=frontend; fi
 
 echo "[deploy] rebuilding: ${BUILD_BACKEND:-none} ${BUILD_FRONTEND:-none}"
 if [ -n "$BUILD_BACKEND" ] && [ -n "$BUILD_FRONTEND" ]; then
-  docker compose -f "$COMPOSE_FILE" build backend &
+  docker compose -p "$PROJECT" -f "$COMPOSE_FILE" build backend &
   B_PID=$!
-  docker compose -f "$COMPOSE_FILE" build frontend &
+  docker compose -p "$PROJECT" -f "$COMPOSE_FILE" build frontend &
   F_PID=$!
   wait "$B_PID" "$F_PID"
 elif [ -n "$BUILD_BACKEND" ]; then
-  docker compose -f "$COMPOSE_FILE" build backend
+  docker compose -p "$PROJECT" -f "$COMPOSE_FILE" build backend
 elif [ -n "$BUILD_FRONTEND" ]; then
-  docker compose -f "$COMPOSE_FILE" build frontend
+  docker compose -p "$PROJECT" -f "$COMPOSE_FILE" build frontend
 fi
 
 # --remove-orphans clears containers for services removed from the compose file
 # (e.g. the old fixed nightly `backup` service, replaced by in-app schedules).
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans $BUILD_BACKEND $BUILD_FRONTEND
+docker compose -p "$PROJECT" -f "$COMPOSE_FILE" up -d --remove-orphans $BUILD_BACKEND $BUILD_FRONTEND
 echo "$NEW_SHA" > "${REPO_PATH:-/repo}/.deploy-sha"
 echo "[deploy] done"
