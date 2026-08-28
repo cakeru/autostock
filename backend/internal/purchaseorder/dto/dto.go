@@ -13,15 +13,23 @@ type AddPOItemRequest struct {
 	UnitCost        float64 `json:"unit_cost" binding:"gte=0"`
 }
 
+// ReceiveInvoice is one supplier invoice attached to a receive. A receive can
+// carry several invoices (e.g. a $100 purchase split into four $25 invoices)
+// that are paid off one at a time.
+type ReceiveInvoice struct {
+	InvoiceNumber string  `json:"invoice_number,omitempty"`
+	InvoiceImage  string  `json:"invoice_image,omitempty"`
+	Amount        float64 `json:"amount" binding:"required,gt=0"`
+}
+
 // ReceiveRequest lists what actually showed up. Any line omitted receives its
 // full remaining quantity_ordered - quantity_received; a line can be included
-// with quantity=0 to explicitly receive nothing for it this trip. The invoice
-// number/image (optional) apply to every batch created by this receive.
+// with quantity=0 to explicitly receive nothing for it this trip. The invoices
+// (optional) apply to every batch created by this receive.
 type ReceiveRequest struct {
-	Items         []ReceiveLine `json:"items,omitempty"`
-	Paid          bool          `json:"paid,omitempty"`
-	InvoiceNumber string        `json:"invoice_number,omitempty"`
-	InvoiceImage  string        `json:"invoice_image,omitempty"`
+	Items    []ReceiveLine    `json:"items,omitempty"`
+	Paid     bool             `json:"paid,omitempty"`
+	Invoices []ReceiveInvoice `json:"invoices,omitempty" binding:"dive"`
 }
 
 type ReceiveLine struct {

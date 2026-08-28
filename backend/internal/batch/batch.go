@@ -10,22 +10,46 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Create inserts a new intake batch and returns its id. invoiceNumber and
-// invoiceImage record the supplier invoice this receive came with (optional).
-func Create(ctx context.Context, tx pgx.Tx, branchID, productID int64, qty float64, unitCost float64, supplierID *int64, amountPaid float64, supplier, dot, notes string, receivedBy *int64, invoiceNumber, invoiceImage string) (int64, error) {
+// Invoice is one supplier invoice attached to a receive. A single receive can
+// carry several invoices (each with its own amount) that are paid off one at
+// a time.
+type Invoice struct {
+	InvoiceNumber string
+	InvoiceImage  string
+	Amount        float64
+}
+
+// Create inserts a new intake batch and returns its id.
+func Create(ctx context.Context, tx pgx.Tx, branchID, productID int64, qty float64, unitCost float64, supplierID *int64, amountPaid float64, supplier, dot, notes string, receivedBy *int64) (int64, error) {
 	var id int64
 	err := tx.QueryRow(ctx, `
 		INSERT INTO batches (branch_id, product_id, supplier_id, supplier, dot_code, unit_cost,
-		                     quantity_received, quantity_remaining, amount_paid, notes, received_by,
-		                     invoice_number, invoice_image)
-		VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $7, $8, NULLIF($9, ''), $10,
-		        NULLIF($11, ''), NULLIF($12, ''))
+		                     quantity_received, quantity_remaining, amount_paid, notes, received_by)
+		VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $7, $8, NULLIF($9, ''), $10)
 		RETURNING id`,
-		branchID, productID, supplierID, supplier, dot, unitCost, qty, amountPaid, notes, receivedBy, invoiceNumber, invoiceImage).Scan(&id)
+		branchID, productID, supplierID, supplier, dot, unitCost, qty, amountPaid, notes, receivedBy).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create batch: %w", err)
 	}
 	return id, nil
+}
+
+// AddInvoices attaches supplier invoices to a batch. When paid is true (paid
+// on delivery) each invoice is marked fully paid.
+func AddInvoices(ctx context.Context, tx pgx.Tx, branchID, batchID int64, invoices []Invoice, paid bool) error {
+	for _, inv := range invoices {
+		amountPaid := 0.0
+		if paid {
+			amountPaid = inv.Amount
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO batch_invoices (branch_id, batch_id, invoice_number, invoice_image, amount, amount_paid)
+			VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''), $5, $6)`,
+			branchID, batchID, inv.InvoiceNumber, inv.InvoiceImage, inv.Amount, amountPaid); err != nil {
+			return fmt.Errorf("add batch invoice: %w", err)
+		}
+	}
+	return nil
 }
 
 // RecordMovement writes one ledger row. refID/batchID/recordedBy are nullable.

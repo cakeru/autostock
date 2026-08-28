@@ -14,11 +14,16 @@ export interface ReceiveLine {
   quantity?: number
 }
 
+export interface ReceiveInvoice {
+  invoice_number?: string
+  invoice_image?: string
+  amount: number
+}
+
 export interface ReceiveRequest {
   items?: ReceiveLine[]
   paid?: boolean
-  invoice_number?: string
-  invoice_image?: string
+  invoices?: ReceiveInvoice[]
 }
 
 export interface ReceiveResult {

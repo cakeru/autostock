@@ -66,16 +66,24 @@ type UpdateProductRequest struct {
 	Location      *string  `json:"location,omitempty"`
 }
 
-type ReceiveStockRequest struct {
-	Quantity      float64 `json:"quantity" binding:"required,gt=0"`
-	UnitCost      float64 `json:"unit_cost,omitempty"`
-	SupplierID    *int64  `json:"supplier_id,omitempty"`
-	Paid          bool    `json:"paid,omitempty"` // paid to supplier on delivery
-	Supplier      string  `json:"supplier,omitempty"`
-	DOTCode       string  `json:"dot_code,omitempty"`
-	Notes         string  `json:"notes,omitempty"`
+// ReceiveInvoice is one supplier invoice attached to a receive. A receive can
+// carry several invoices (e.g. a $100 purchase split into four $25 invoices)
+// that are paid off one at a time.
+type ReceiveInvoice struct {
 	InvoiceNumber string  `json:"invoice_number,omitempty"`
-	InvoiceImage  string  `json:"invoice_image,omitempty"` // uploaded URL, optional
+	InvoiceImage  string  `json:"invoice_image,omitempty"`
+	Amount        float64 `json:"amount" binding:"required,gt=0"`
+}
+
+type ReceiveStockRequest struct {
+	Quantity   float64 `json:"quantity" binding:"required,gt=0"`
+	UnitCost   float64 `json:"unit_cost,omitempty"`
+	SupplierID *int64  `json:"supplier_id,omitempty"`
+	Paid       bool    `json:"paid,omitempty"` // paid to supplier on delivery
+	Supplier   string  `json:"supplier,omitempty"`
+	DOTCode    string  `json:"dot_code,omitempty"`
+	Notes      string  `json:"notes,omitempty"`
+	Invoices   []ReceiveInvoice `json:"invoices,omitempty" binding:"dive"`
 }
 
 type AdjustStockRequest struct {

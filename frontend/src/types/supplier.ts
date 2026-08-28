@@ -12,6 +12,15 @@ export interface Supplier {
   created_at: string
 }
 
+export interface BatchInvoice {
+  id: number
+  invoice_number?: string
+  invoice_image?: string
+  amount: number
+  amount_paid: number
+  owed: number
+}
+
 export interface Purchase {
   batch_id: number
   product_id?: number
@@ -22,8 +31,7 @@ export interface Purchase {
   amount_paid: number
   owed: number
   dot_code?: string
-  invoice_number?: string
-  invoice_image?: string
+  invoices: BatchInvoice[]
   received_at: string
 }
 

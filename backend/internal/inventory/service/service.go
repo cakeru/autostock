@@ -198,7 +198,7 @@ func (s *Service) Create(ctx context.Context, branchID int64, userID int64, req 
 	// Opening stock becomes the product's first batch so the batch ledger
 	// starts consistent with stock_quantity.
 	if p.StockQuantity > 0 {
-		batchID, err := batch.Create(ctx, tx, branchID, p.ID, p.StockQuantity, p.BuyPrice, nil, 0, "Opening stock", p.DOTCode, "", &userID, "", "")
+		batchID, err := batch.Create(ctx, tx, branchID, p.ID, p.StockQuantity, p.BuyPrice, nil, 0, "Opening stock", p.DOTCode, "", &userID)
 		if err != nil {
 			return nil, err
 		}
@@ -326,9 +326,18 @@ func (s *Service) ReceiveStock(ctx context.Context, branchID int64, id int64, us
 	if req.Paid {
 		amountPaid = req.Quantity * cost
 	}
-	batchID, err := batch.Create(ctx, tx, branchID, id, req.Quantity, cost, req.SupplierID, amountPaid, req.Supplier, dot, req.Notes, &userID, req.InvoiceNumber, req.InvoiceImage)
+	batchID, err := batch.Create(ctx, tx, branchID, id, req.Quantity, cost, req.SupplierID, amountPaid, req.Supplier, dot, req.Notes, &userID)
 	if err != nil {
 		return nil, err
+	}
+	if len(req.Invoices) > 0 {
+		invoices := make([]batch.Invoice, 0, len(req.Invoices))
+		for _, inv := range req.Invoices {
+			invoices = append(invoices, batch.Invoice{InvoiceNumber: inv.InvoiceNumber, InvoiceImage: inv.InvoiceImage, Amount: inv.Amount})
+		}
+		if err := batch.AddInvoices(ctx, tx, branchID, batchID, invoices, req.Paid); err != nil {
+			return nil, err
+		}
 	}
 	if err := batch.RecordMovement(ctx, tx, branchID, id, req.Quantity, "received", "batch", &batchID, &batchID, &userID); err != nil {
 		return nil, err
@@ -406,7 +415,7 @@ func (s *Service) AdjustStock(ctx context.Context, branchID int64, id int64, use
 			return nil, err
 		}
 	} else {
-		batchID, err := batch.Create(ctx, tx, branchID, id, req.QuantityChange, p.BuyPrice, nil, 0, "Adjustment", p.DOTCode, req.Reason, &userID, "", "")
+		batchID, err := batch.Create(ctx, tx, branchID, id, req.QuantityChange, p.BuyPrice, nil, 0, "Adjustment", p.DOTCode, req.Reason, &userID)
 		if err != nil {
 			return nil, err
 		}

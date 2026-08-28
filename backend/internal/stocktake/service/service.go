@@ -358,7 +358,7 @@ func (s *Service) applyStocktakeLine(ctx context.Context, branchID, stocktakeID,
 
 	refID := stocktakeID
 	if variance > 0 {
-		batchID, err := batch.Create(ctx, tx, branchID, productID, variance, 0, nil, 0, "Stocktake", "", "Found on physical count", &userID, "", "")
+		batchID, err := batch.Create(ctx, tx, branchID, productID, variance, 0, nil, 0, "Stocktake", "", "Found on physical count", &userID)
 		if err != nil {
 			return 0, err
 		}

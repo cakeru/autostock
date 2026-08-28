@@ -378,9 +378,18 @@ func (s *Service) Receive(ctx context.Context, branchID, poID, userID int64, req
 		if req.Paid {
 			amountPaid = float64(qty) * l.unitCost
 		}
-		batchID, err := batch.Create(ctx, tx, branchID, l.productID, float64(qty), l.unitCost, &supplierID, amountPaid, supplierName, "", "PO "+poNumber, &userID, req.InvoiceNumber, req.InvoiceImage)
+		batchID, err := batch.Create(ctx, tx, branchID, l.productID, float64(qty), l.unitCost, &supplierID, amountPaid, supplierName, "", "PO "+poNumber, &userID)
 		if err != nil {
 			return nil, err
+		}
+		if len(req.Invoices) > 0 {
+			invoices := make([]batch.Invoice, 0, len(req.Invoices))
+			for _, inv := range req.Invoices {
+				invoices = append(invoices, batch.Invoice{InvoiceNumber: inv.InvoiceNumber, InvoiceImage: inv.InvoiceImage, Amount: inv.Amount})
+			}
+			if err := batch.AddInvoices(ctx, tx, branchID, batchID, invoices, req.Paid); err != nil {
+				return nil, err
+			}
 		}
 		if err := batch.RecordMovement(ctx, tx, branchID, l.productID, float64(qty), "po_received", "purchase_order", &poID, &batchID, &userID); err != nil {
 			return nil, err
