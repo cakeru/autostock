@@ -207,22 +207,29 @@ func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, invoiceID
 		if err != nil {
 			return nil, fmt.Errorf("owed invoices: %w", err)
 		}
+		type owedInvoice struct {
+			id, batchID int64
+			owed        float64
+		}
+		var invoices []owedInvoice
 		for rows.Next() {
-			var invID, batchID int64
-			var owed float64
-			if err := rows.Scan(&invID, &batchID, &owed); err != nil {
+			var o owedInvoice
+			if err := rows.Scan(&o.id, &o.batchID, &o.owed); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("scan owed invoice: %w", err)
 			}
-			if _, err := tx.Exec(ctx, `UPDATE batch_invoices SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(owed), invID); err != nil {
-				return nil, fmt.Errorf("apply invoice payment: %w", err)
-			}
-			if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(owed), batchID); err != nil {
-				return nil, fmt.Errorf("apply batch payment: %w", err)
-			}
-			paid += owed
+			invoices = append(invoices, o)
 		}
 		rows.Close()
+		for _, o := range invoices {
+			if _, err := tx.Exec(ctx, `UPDATE batch_invoices SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(o.owed), o.id); err != nil {
+				return nil, fmt.Errorf("apply invoice payment: %w", err)
+			}
+			if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(o.owed), o.batchID); err != nil {
+				return nil, fmt.Errorf("apply batch payment: %w", err)
+			}
+			paid += o.owed
+		}
 	}
 
 	if len(batchIDs) > 0 {
@@ -238,19 +245,26 @@ func (s *Service) Pay(ctx context.Context, branchID, supplierID int64, invoiceID
 		if err != nil {
 			return nil, fmt.Errorf("owed batches: %w", err)
 		}
+		type owedBatch struct {
+			id   int64
+			owed float64
+		}
+		var batches []owedBatch
 		for rows.Next() {
-			var batchID int64
-			var owed float64
-			if err := rows.Scan(&batchID, &owed); err != nil {
+			var o owedBatch
+			if err := rows.Scan(&o.id, &o.owed); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("scan owed batch: %w", err)
 			}
-			if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(owed), batchID); err != nil {
-				return nil, fmt.Errorf("apply batch payment: %w", err)
-			}
-			paid += owed
+			batches = append(batches, o)
 		}
 		rows.Close()
+		for _, o := range batches {
+			if _, err := tx.Exec(ctx, `UPDATE batches SET amount_paid = amount_paid + $1 WHERE id = $2`, round2(o.owed), o.id); err != nil {
+				return nil, fmt.Errorf("apply batch payment: %w", err)
+			}
+			paid += o.owed
+		}
 	}
 
 	if paid == 0 {
